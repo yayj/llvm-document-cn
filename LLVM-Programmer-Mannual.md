@@ -335,13 +335,197 @@ Note that graph visualization features are compiled out of Release builds to red
 
 LLVM has a plethora of data structures in the llvm/ADT/ directory, and we commonly use STL data structures. This section describes the trade-offs you should consider when you pick one.
 
-LLVM的llvm/ADT拥有大量
+LLVM通常是使用STL里的数据结构，不过在`llvm/ADT`里也提供了大量的数据结构。这一节描述了如何选择一种合适的数据结构。
 
 The first step is a choose your own adventure: do you want a sequential container, a set-like container, or a map-like container? The most important thing when choosing a container is the algorithmic properties of how you plan to access the container. Based on that, you should use:
 
-a map-like container if you need efficient look-up of an value based on another value. Map-like containers also support efficient queries for containment (whether a key is in the map). Map-like containers generally do not support efficient reverse mapping (values to keys). If you need that, use two maps. Some map-like containers also support efficient iteration through the keys in sorted order. Map-like containers are the most expensive sort, only use them if you need one of these capabilities.
-a set-like container if you need to put a bunch of stuff into a container that automatically eliminates duplicates. Some set-like containers support efficient iteration through the elements in sorted order. Set-like containers are more expensive than sequential containers.
-a sequential container provides the most efficient way to add elements and keeps track of the order they are added to the collection. They permit duplicates and support efficient iteration, but do not support efficient look-up based on a key.
-a string container is a specialized sequential container or reference structure that is used for character or byte arrays.
-a bit container provides an efficient way to store and perform set operations on sets of numeric id's, while automatically eliminating duplicates. Bit containers require a maximum of 1 bit for each identifier you want to store.
+首先需要确定一个分类：是需要一个有序类容器、还是一个集合类容器亦或是map类容器？打算如何访问数据是确定选择哪类容器的决定性因素。所以，我们可以使用：
+
+* a [map-like]("http://llvm.org/~matt/llvm/ProgrammersManual.html#ds_map") container if you need efficient look-up of an value based on another value. Map-like containers also support efficient queries for containment (whether a key is in the map). Map-like containers generally do not support efficient reverse mapping (values to keys). If you need that, use two maps. Some map-like containers also support efficient iteration through the keys in sorted order. Map-like containers are the most expensive sort, only use them if you need one of these capabilities.  
+如果需要通过一个关键字去快速查找对应值，则可以使用[map类容器]("http://llvm.org/~matt/llvm/ProgrammersManual.html#ds_map")。Map类容器检查关键字是否存在的效率也很高。但通常来说，反向映射的效率就相对差一些(通过值查找关键字)，如果需要反向映射，则可以使用两个map。部分map类容器也支持通过排序后的关键字进行快速遍历。Map类容器的开销是所有容器里最大的，请在确实需要以上功能时才使用map类容器。
+
+* a set-like container if you need to put a bunch of stuff into a container that automatically eliminates duplicates. Some set-like containers support efficient iteration through the elements in sorted order. Set-like containers are more expensive than sequential containers.  
+在把一堆元素存入容器时，如果希望容器能自动剔除重复的元素的话，则可以使用[集合类容器]("http://llvm.org/~matt/llvm/ProgrammersManual.html#ds_set")。部分集合类容器也支持通过排序后的元素进行快速遍历。集合类容器比有序类容器的开销要大一些。
+
+* a sequential container provides the most efficient way to add elements and keeps track of the order they are added to the collection. They permit duplicates and support efficient iteration, but do not support efficient look-up based on a key.  
+如果要让元素在容器中的位置跟放入时的顺序保持一致，那么[有序类容器]("http://llvm.org/~matt/llvm/ProgrammersManual.html#ds_sequential")是最佳选择。有序类容器允许有重复的元素，并支持快速遍历，但不支持通过关键字查找。
+
+* a string container is a specialized sequential container or reference structure that is used for character or byte arrays.  
+[字符串容器]("http://llvm.org/~matt/llvm/ProgrammersManual.html#ds_string")一个特殊的有序类容器或引用结构，它用于存放字符数组或字节数组。
+
+* a bit container provides an efficient way to store and perform set operations on sets of numeric id's, while automatically eliminating duplicates. Bit containers require a maximum of 1 bit for each identifier you want to store.  
+[比特位容器]("http://llvm.org/~matt/llvm/ProgrammersManual.html#ds_bit")…
+
 Once the proper category of container is determined, you can fine tune the memory use, constant factors, and cache behaviors of access by intelligently picking a member of the category. Note that constant factors and cache behavior can be a big deal. If you have a vector that usually only contains a few elements (but could contain many), for example, it's much better to use SmallVector than vector . Doing so avoids (relatively) expensive malloc/free calls, which dwarf the cost of adding the elements to the container.
+
+选定分类后，就可以在分类里根据内存使用，常量因素和缓存模式来选择具体的容器了，其中常量因素和缓存模式是…。如果容器中只需要存放少量的元素，那么使用SmallVector要比vector好，因为相对而言，SmallVector能减少对malloc/free的调用，…
+
+### Sequential Containers (std::vector, std::list, etc) 有序类容器(std::vector, std::list等)
+
+There are a variety of sequential containers available for you, based on your needs. Pick the first in this section that will do what you want.
+
+有序类容器非常多，可以根据本节开始部分的方法来选择合适的容器。
+
+#### llvm/ADT/ArrayRef.h
+
+The llvm::ArrayRef class is the preferred class to use in an interface that accepts a sequential list of elements in memory and just reads from them. By taking an ArrayRef, the API can be passed a fixed size array, an std::vector, an llvm::SmallVector and anything else that is contiguous in memory.
+
+llvm::ArrayRef是只读不写的有序类容器，所以它很适合用作函数的参数类型，这样函数可以接受固定大小的数组、std::vector、llvm::SmallVector，甚至可以是内存中任意一段连续的元素。
+
+#### Fixed Size Arrays 固定大小的数组
+
+Fixed size arrays are very simple and very fast. They are good if you know exactly how many elements you have, or you have a (low) upper bound on how many you have.
+
+固定大小数组非常简单，访问速度也很快。如果元素个数固定，或者有个数上限的时候，固定大小的数组是一个很好的选择。
+
+#### Heap Allocated Arrays 堆数组
+
+Heap allocated arrays (new[] + delete[]) are also simple. They are good if the number of elements is variable, if you know how many elements you will need before the array is allocated, and if the array is usually large (if not, consider a SmallVector). The cost of a heap allocated array is the cost of the new/delete (aka malloc/free). Also note that if you are allocating an array of a type with a constructor, the constructor and destructors will be run for every element in the array (re-sizable vectors only construct those elements actually used).
+
+堆数组(new[] + delete[])也很简单。当元素个数是变量，并且能在分配空间前得知个数，同时元素个数比较大(否则请考虑SmallVector)时，则可以使用堆数组。堆数组的分配开销即为net/delete(aka malloc/free)的开销。
+
+...同时，如果数组元素有构造函数，那么每个函数的构造函数和析构函数都会在必要时调用()。
+
+#### "llvm/ADT/TinyPtrVector.h"
+
+TinyPtrVector<Type> is a highly specialized collection class that is optimized to avoid allocation in the case when a vector has zero or one elements. It has two major restrictions: 1) it can only hold values of pointer type, and 2) it cannot hold a null pointer.
+
+TinyPtrVector<Type>是一种非常特殊的容器，它专门对那些只有一个或没有元素的容器进行了优化，使其不再额外申请内存空间。所以它有两个限制：1)元素的类型必须是指针，2)不能存放空指针。
+
+Since this container is highly specialized, it is rarely used.
+
+因为该容器过于特殊，所以很少使用。
+
+#### "llvm/ADT/SmallVector.h"
+
+SmallVector<Type, N> is a simple class that looks and smells just like vector<Type>: it supports efficient iteration, lays out elements in memory order (so you can do pointer arithmetic between elements), supports efficient push_back/pop_back operations, supports efficient random access to its elements, etc.
+
+SmallVector<Type, N>和vector<Type>非常地像，它支持快速遍历，元素在内存连续排列(这样可以用指针运算计算元素地址)，同时它的push_back/pop_back和对元素的随机访问的效率都很高。
+
+The advantage of SmallVector is that it allocates space for some number of elements (N) in the object itself. Because of this, if the SmallVector is dynamically smaller than N, no malloc is performed. This can be a big win in cases where the malloc/free call is far more expensive than the code that fiddles around with the elements.
+
+SmallVector的优势在于它会为自己预先申请指定数量(N)的元素所需的内存空间。正因为如此，只要元素个数动态变化时不超过N，那么SmallVector就不需要调用malloc。在某些情况下，malloc/free的开销要比移动元素的开销大，那么这时SmallVector就非常有用了。
+
+This is good for vectors that are "usually small" (e.g. the number of predecessors/successors of a block is usually less than 8). On the other hand, this makes the size of the SmallVector itself large, so you don't want to allocate lots of them (doing so will waste a lot of space). As such, SmallVectors are most useful when on the stack.
+
+同时，在元素个数比较少时使用SmallVector也很好(比如块结构的前后继个数通常是小于8的)。另一方面，该特点导致SmallVector的大小比实际大小要大，所以最好不要过多地使用(这样会浪费内存空间)。就这点来说，SmallVector很适合用在栈上。
+
+SmallVector also provides a nice portable and efficient replacement for alloca.
+
+...
+
+#### <vector>
+
+std::vector is well loved and respected. It is useful when SmallVector isn't: when the size of the vector is often large (thus the small optimization will rarely be a benefit) or if you will be allocating many instances of the vector itself (which would waste space for elements that aren't in the container). vector is also useful when interfacing with code that expects vectors :).
+
+std::vector是非常受欢迎的容器，它能做一些SmallVector不能做的事情：例如元素个数比较大(这样SmallVector的优势就丧失殆尽)的时候，或者需要很多容器实例(大量SmallVector会浪费内存空间)。当然了，vector的优势还体现在接口要求必须是vector时:)。
+
+One worthwhile note about std::vector: avoid code like this:
+
+一个很值得我们注意的std::vector的错误用法是：
+
+```
+for ( ... ) {
+   std::vector<foo> V;
+   // make use of V.
+}
+```
+
+Instead, write this as:
+
+而实际上应该这样做：
+
+```
+std::vector<foo> V;
+for ( ... ) {
+   // make use of V.
+   V.clear();
+}
+```
+
+Doing so will save (at least) one heap allocation and free per iteration of the loop.
+
+这样做可以(至少)省去一次内存分配的开销，并且可以避免每次循环结束时都会释放容器的内存空间。
+
+#### <deque>
+
+std::deque is, in some senses, a generalized version of std::vector. Like std::vector, it provides constant time random access and other similar properties, but it also provides efficient access to the front of the list. It does not guarantee continuity of elements within memory.
+
+In exchange for this extra flexibility, std::deque has significantly higher constant factor costs than std::vector. If possible, use std::vector or something cheaper.
+
+<list>
+
+std::list is an extremely inefficient class that is rarely useful. It performs a heap allocation for every element inserted into it, thus having an extremely high constant factor, particularly for small data types. std::list also only supports bidirectional iteration, not random access iteration.
+
+In exchange for this high cost, std::list supports efficient access to both ends of the list (like std::deque, but unlike std::vector or SmallVector). In addition, the iterator invalidation characteristics of std::list are stronger than that of a vector class: inserting or removing an element into the list does not invalidate iterator or pointers to other elements in the list.
+
+llvm/ADT/ilist.h
+
+ilist<T> implements an 'intrusive' doubly-linked list. It is intrusive, because it requires the element to store and provide access to the prev/next pointers for the list.
+
+ilist has the same drawbacks as std::list, and additionally requires an ilist_traits implementation for the element type, but it provides some novel characteristics. In particular, it can efficiently store polymorphic objects, the traits class is informed when an element is inserted or removed from the list, and ilists are guaranteed to support a constant-time splice operation.
+
+These properties are exactly what we want for things like Instructions and basic blocks, which is why these are implemented with ilists.
+
+Related classes of interest are explained in the following subsections:
+ilist_traits
+iplist
+llvm/ADT/ilist_node.h
+Sentinels
+llvm/ADT/PackedVector.h
+
+Useful for storing a vector of values using only a few number of bits for each value. Apart from the standard operations of a vector-like container, it can also perform an 'or' set operation.
+
+For example:
+
+enum State {
+    None = 0x0,
+    FirstCondition = 0x1,
+    SecondCondition = 0x2,
+    Both = 0x3
+};
+
+State get() {
+    PackedVector<State, 2> Vec1;
+    Vec1.push_back(FirstCondition);
+
+    PackedVector<State, 2> Vec2;
+    Vec2.push_back(SecondCondition);
+
+    Vec1 |= Vec2;
+    return Vec1[0]; // returns 'Both'.
+}
+ilist_traits
+
+ilist_traits<T> is ilist<T>'s customization mechanism. iplist<T> (and consequently ilist<T>) publicly derive from this traits class.
+
+iplist
+
+iplist<T> is ilist<T>'s base and as such supports a slightly narrower interface. Notably, inserters from T& are absent.
+
+ilist_traits<T> is a public base of this class and can be used for a wide variety of customizations.
+
+llvm/ADT/ilist_node.h
+
+ilist_node<T> implements a the forward and backward links that are expected by the ilist<T> (and analogous containers) in the default manner.
+
+ilist_node<T>s are meant to be embedded in the node type T, usually T publicly derives from ilist_node<T>.
+
+Sentinels
+
+ilists have another specialty that must be considered. To be a good citizen in the C++ ecosystem, it needs to support the standard container operations, such as begin and end iterators, etc. Also, the operator-- must work correctly on the end iterator in the case of non-empty ilists.
+
+The only sensible solution to this problem is to allocate a so-called sentinel along with the intrusive list, which serves as the end iterator, providing the back-link to the last element. However conforming to the C++ convention it is illegal to operator++ beyond the sentinel and it also must not be dereferenced.
+
+These constraints allow for some implementation freedom to the ilist how to allocate and store the sentinel. The corresponding policy is dictated by ilist_traits<T>. By default a T gets heap-allocated whenever the need for a sentinel arises.
+
+While the default policy is sufficient in most cases, it may break down when T does not provide a default constructor. Also, in the case of many instances of ilists, the memory overhead of the associated sentinels is wasted. To alleviate the situation with numerous and voluminous T-sentinels, sometimes a trick is employed, leading to ghostly sentinels.
+
+Ghostly sentinels are obtained by specially-crafted ilist_traits<T> which superpose the sentinel with the ilist instance in memory. Pointer arithmetic is used to obtain the sentinel, which is relative to the ilist's this pointer. The ilist is augmented by an extra pointer, which serves as the back-link of the sentinel. This is the only field in the ghostly sentinel which can be legally accessed.
+
+Other Sequential Container options
+
+Other STL containers are available, such as std::string.
+
+There are also various STL adapter classes such as std::queue, std::priority_queue, std::stack, etc. These provide simplified access to an underlying container but don't affect the cost of the container itself.
+
