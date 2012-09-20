@@ -232,7 +232,7 @@ The DEBUG_WITH_TYPE macro is also available for situations where you would like 
 	DEBUG_WITH_TYPE("bar", errs() << "'bar' debug type\n"));
 	DEBUG_WITH_TYPE("", errs() << "No debug type (2)\n");
 
-#### Statistic类和-stats选项
+### Statistic类和-stats选项
 
 The "[llvm/ADT/Statistic.h]("http://llvm.org/doxygen/Statistic_8h-source.html")" file provides a class named Statistic that is used as a unified way to keep track of what the LLVM compiler is doing and how effective various optimizations are. It is useful to see what optimizations are contributing to making a particular program run faster.
 
@@ -240,6 +240,96 @@ The "[llvm/ADT/Statistic.h]("http://llvm.org/doxygen/Statistic_8h-source.html")"
 
 Often you may run your pass on some big program, and you're interested to see how many times it makes a certain transformation. Although you can do this with hand inspection, or some ad-hoc method, this is a real pain and not very useful for big programs. Using the Statistic class makes it very easy to keep track of this information, and the calculated information is presented in a uniform manner with the rest of the passes being executed.
 
-
+通常来说，我们可能只是开发一个大的程序中的某个部件，那么在开发过程中，我们会关心对自己部件做了多少改进。虽然可以使用手动检查或自定义方法等方式来观察，但这个过程是很繁琐的，而且对较大的程序来说也不实用。而Statistic类可以简化这个过程，并提供一个统一的方式...
 
 There are many examples of Statistic uses, but the basics of using it are as follows:
+
+Statistic的例子非常多，不过最基本的用法是这样的：
+
+1. 用如下方式自定义Statistic:
+
+		#define DEBUG_TYPE "mypassname"   // This goes before any #includes.
+		STATISTIC(NumXForms, "The # of times I did stuff");
+The STATISTIC macro defines a static variable, whose name is specified by the first argument. The pass name is taken from the DEBUG_TYPE macro, and the description is taken from the second argument. The variable defined ("NumXForms" in this case) acts like an unsigned integer.
+DEBUG_TYPE宏定义了调试信息的分类，STATISTIC宏的第一个参数定义了一个静态变量，第二个参数是统计描述信息。静态变量(本例中的NumXForms)的类型是无符号整数。
+
+1. Whenever you make a transformation, bump the counter:
+1. 在任何有改动的地方都增加计数器：
+
+		++NumXForms;   // I did stuff!
+
+That's all you have to do. To get 'opt' to print out the statistics gathered, use the '-stats' option:
+
+搞定。使用-stats选项，让程序输出收集到的统计信息：
+
+	$ opt -stats -mypassname < program.bc > /dev/null
+	... statistics output ...
+When running opt on a C file from the SPEC benchmark suite, it gives a report that looks like this:
+
+对一个SPEC benchmark suite里的C文件进行编译，结果如下：
+
+	   7646 bitcodewriter   - Number of normal instructions
+	    725 bitcodewriter   - Number of oversized instructions
+	 129996 bitcodewriter   - Number of bitcode bytes written
+	   2817 raise           - Number of insts DCEd or constprop'd
+	   3213 raise           - Number of cast-of-self removed
+	   5046 raise           - Number of expression trees converted
+	     75 raise           - Number of other getelementptr's formed
+	    138 raise           - Number of load/store peepholes
+	     42 deadtypeelim    - Number of unused typenames removed from symtab
+	    392 funcresolve     - Number of varargs functions resolved
+	     27 globaldce       - Number of global variables removed
+	      2 adce            - Number of basic blocks removed
+	    134 cee             - Number of branches revectored
+	     49 cee             - Number of setcc instruction eliminated
+	    532 gcse            - Number of loads removed
+	   2919 gcse            - Number of instructions removed
+	     86 indvars         - Number of canonical indvars added
+	     87 indvars         - Number of aux indvars removed
+	     25 instcombine     - Number of dead inst eliminate
+	    434 instcombine     - Number of insts combined
+	    248 licm            - Number of load insts hoisted
+	   1298 licm            - Number of insts hoisted to a loop pre-header
+	      3 licm            - Number of insts hoisted to multiple loop preds (bad, no loop pre-header)
+	     75 mem2reg         - Number of alloca's promoted
+	   1444 cfgsimplify     - Number of blocks simplified
+Obviously, with so many optimizations, having a unified framework for this stuff is very nice. Making your pass fit well into the framework makes it more maintainable and useful.
+
+显而易见，这种统一的框架很好的显示了如此多的优化结果。使用该框架将会使我们的程序更具可维护性。
+
+### Viewing graphs while debugging code 调试时显示图
+
+Several of the important data structures in LLVM are graphs: for example CFGs made out of LLVM BasicBlocks, CFGs made out of LLVM MachineBasicBlocks, and Instruction Selection DAGs. In many cases, while debugging various parts of the compiler, it is nice to instantly visualize these graphs.
+
+LLVM中几种重要的数据结构是以图表示的，例如由[BasicBlock]("#BasicBlock")、[MachineBasicBlock]("#machinebasicblock")构成的流程控制图，[指令选择的有向无环图]("http://llmv.org/~matt/llvm/CodeGenerator.html#selectiondag_intro")。如果能够在编译器的调试阶段能够以图形方式展示这些图就好了。
+
+LLVM provides several callbacks that are available in a debug build to do exactly that. If you call the Function::viewCFG() method, for example, the current LLVM tool will pop up a window containing the CFG for the function where each basic block is a node in the graph, and each node contains the instructions in the block. Similarly, there also exists Function::viewCFGOnly() (does not include the instructions), the MachineFunction::viewCFG() and MachineFunction::viewCFGOnly(), and the SelectionDAG::viewGraph() methods. Within GDB, for example, you can usually use something like call DAG.viewGraph() to pop up a window. Alternatively, you can sprinkle calls to these functions in your code in places you want to debug.
+
+LLVM提供了几个回调函数来实现该功能，它们只在调试模式下有效。比如当调用Function::viewCFG()方法时，当前的LLVM工具会弹出一个窗口来显示流程控制图，该图…。同样，LLVM还提供了Function::viewCFGOnly()(不显示指令)、MachineFunction::viewCFG()、MachineFunction::viewCFGOnly()、SelectionDAG::viewGraph()这些方法。在GDB中，通常可以使用call DAG.viewGraph()来弹出窗口。当然，也可以它们放在代码里面，以便调试时使用。
+
+Getting this to work requires a small amount of configuration. On Unix systems with X11, install the graphviz toolkit, and make sure 'dot' and 'gv' are in your path. If you are running on Mac OS/X, download and install the Mac OS/X Graphviz program, and add /Applications/Graphviz.app/Contents/MacOS/ (or wherever you install it) to your path. Once in your system and path are set up, rerun the LLVM configure script and rebuild LLVM to enable this functionality.
+
+实现该功能只需要做少量的配置即可。如果是使用X11的Unix系统，需要安装graphviz工具包，并确保$PATH变量中包括了dot和gv命令。如果是Mac OS/X，需要下载并安装Mac OS/X版的Graphviz，并将/Applications/Graphviz.app/Contents/MacOS(或者自定义的路径)添加到路径中。设置完毕后，重新运行LLVM的配置脚本并重新编译LLVM即可开启上述功能。
+
+SelectionDAG has been extended to make it easier to locate interesting nodes in large complex graphs. From gdb, if you call DAG.setGraphColor(node, "color"), then the next call DAG.viewGraph() would highlight the node in the specified color (choices of colors can be found at colors.) More complex node attributes can be provided with call DAG.setGraphAttrs(node, "attributes") (choices can be found at Graph Attributes.) If you want to restart and clear all the current graph attributes, then you can call DAG.clearGraphAttrs().
+
+SelectionDAG提供的功能可以很容易在一张巨大、复杂的图里找到我们感兴趣的结点。在gdb中，使用call DAG.setGraphColor(node, "color")，那以后的DAG.viewGraph()则可以用指定的颜色显示这些结点(colors提供了所有的颜色)。一些比较复杂的结点属性则可以使用call DAG.setGraphAttrs(node, "attributes")(Graph Attributes提供了所有的属性)来显示。如果想清除所有的图属性或重头再来，可以使用call DAG.clearGraphAttrs()。
+
+Note that graph visualization features are compiled out of Release builds to reduce file size. This means that you need a Debug+Asserts or Release+Asserts build to use these features.
+
+需要注意的是，为了减小文件大小，在Release build中是不包含上述功能的。也就是说，如果要使用这些图形化功能，则必须使用Debug+Asserts或Release+Asserts选项编译LLVM。
+
+## Picking the Right Data Structure for a Task 选择正确的数据结构
+
+LLVM has a plethora of data structures in the llvm/ADT/ directory, and we commonly use STL data structures. This section describes the trade-offs you should consider when you pick one.
+
+LLVM的llvm/ADT拥有大量
+
+The first step is a choose your own adventure: do you want a sequential container, a set-like container, or a map-like container? The most important thing when choosing a container is the algorithmic properties of how you plan to access the container. Based on that, you should use:
+
+a map-like container if you need efficient look-up of an value based on another value. Map-like containers also support efficient queries for containment (whether a key is in the map). Map-like containers generally do not support efficient reverse mapping (values to keys). If you need that, use two maps. Some map-like containers also support efficient iteration through the keys in sorted order. Map-like containers are the most expensive sort, only use them if you need one of these capabilities.
+a set-like container if you need to put a bunch of stuff into a container that automatically eliminates duplicates. Some set-like containers support efficient iteration through the elements in sorted order. Set-like containers are more expensive than sequential containers.
+a sequential container provides the most efficient way to add elements and keeps track of the order they are added to the collection. They permit duplicates and support efficient iteration, but do not support efficient look-up based on a key.
+a string container is a specialized sequential container or reference structure that is used for character or byte arrays.
+a bit container provides an efficient way to store and perform set operations on sets of numeric id's, while automatically eliminating duplicates. Bit containers require a maximum of 1 bit for each identifier you want to store.
+Once the proper category of container is determined, you can fine tune the memory use, constant factors, and cache behaviors of access by intelligently picking a member of the category. Note that constant factors and cache behavior can be a big deal. If you have a vector that usually only contains a few elements (but could contain many), for example, it's much better to use SmallVector than vector . Doing so avoids (relatively) expensive malloc/free calls, which dwarf the cost of adding the elements to the container.
