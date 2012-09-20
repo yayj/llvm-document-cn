@@ -53,7 +53,7 @@ The LLVM source-base makes extensive use of a custom form of RTTI. These templat
 
 LLVM有一些自定义模板来表示运行时类型信息(RTTI)，并在源码中广泛使用。这些模板跟C++的dynamic_cast<>操作符很相似，但却没有它的一些缺点(dynamic_cast<>只能对有v-table的类使用)。所以，了解这些模板并清楚它们的工作原理是非常有必要的。所有的模板的定义都在文件[llvm/Support/Casting.h]("http://llvm.org/doxygen/Casting_8h-source.html")中，不过你通常不用直接include它。
 
-isa<>:
+* isa<>:
 The isa<> operator works exactly like the Java "instanceof" operator. It returns true or false depending on whether a reference or pointer points to an instance of the specified class. This can be very useful for constraint checking of various sorts (example below).
 
 * **isa<>**: 和Java语言里的instanceof操作符一样，isa<>用于判断一个引用或指针的类型是否和给出的类型一致，这在需要准确判断类型时非常有用。
@@ -66,15 +66,14 @@ The cast<> operator is a "checked cast" operation. It converts a pointer or refe
 		static bool isLoopInvariant(const Value *V, const Loop *L) {
 		  if (isa<Constant>(V) || isa<Argument>(V) ||isa<GlobalValue>(V))
 		    return true;
-    
+   
 		  // Otherwise, it must be an instruction...
 		  return !L->contains(cast<Instruction>(V)->getParent());
 		}
-Note that you should not use an isa<> test followed by a cast<>, for that use the dyn_cast<> operator.
-
+Note that you should not use an isa<> test followed by a cast<>, for that use the dyn_cast<> operator.  
 **注意**: 不能在cast<>后才用isa<>去检查类型，这种情况应当使用dyn_cast<>。
 
-dyn_cast<>:
+* dyn_cast<>:
 The dyn_cast<> operator is a "checking cast" operation. It checks to see if the operand is of the specified type, and if so, returns a pointer to it (this operator does not work with references). If the operand is not of the correct type, a null pointer is returned. Thus, this works very much like the dynamic_cast<> operator in C++, and should be used in the same circumstances. Typically, the dyn_cast<> operator is used in an if statement or some other flow control statement like this:
 
 * dyn_cast<>: dyn_cast<>是一个带检查的类型转换，它先检查操作数的类型是否匹配，若匹配则返回类型转换后的指针(该操作符不能用于引用)，否则返回空指针。由此可见，它和C++中的dynamic_cast<>非常像，可以用于相同的场景。通常来说，dyn_cast<>一般用在类似于以下例子中的流程控制语句中：
@@ -83,8 +82,7 @@ The dyn_cast<> operator is a "checking cast" operation. It checks to see if the 
 		  // ...
 		}
 		This form of the if statement effectively combines together a call to isa<> and a call to cast<> into one statement, which is very convenient.
-Note that the dyn_cast<> operator, like C++'s dynamic_cast<> or Java's instanceof operator, can be abused. In particular, you should not use big chained if/then/else blocks to check for lots of different variants of classes. If you find yourself wanting to do this, it is much cleaner and more efficient to use the InstVisitor class to dispatch over the instruction type directly.
-
+Note that the dyn_cast<> operator, like C++'s dynamic_cast<> or Java's instanceof operator, can be abused. In particular, you should not use big chained if/then/else blocks to check for lots of different variants of classes. If you find yourself wanting to do this, it is much cleaner and more efficient to use the InstVisitor class to dispatch over the instruction type directly.  
 **注意**: dyn_cast<>可能会像C++的dynamic_cast<>和Java中的instanceof一样被滥用。通常来说，我们不应该用一长串if/then/else来进行变量的类型判断。如果非如此不可，那么使用InstVisitor类来实现…
 
 cast_or_null<>:
@@ -119,7 +117,7 @@ StringRef表示一个常量字符串(一串字符和它的长度)的引用，它
 
 It can be implicitly constructed using a C style null-terminated string, an std::string, or explicitly with a character pointer and length. For example, the StringRef find function is declared as:
 
-可以使用C风格的0结尾字符串或std::string来隐式创建一个StringRef，也用一个字符指针和长度来显式创建。例如，假设这是查找字符串的函数的申明：
+可以使用C风格的0结尾字符串或std::string来隐式创建一个StringRef，也用一个字符指针和长度来显式创建。例如，假设这是查找字符串的函数的声明：
 
 `iterator find(StringRef Key);`
 
@@ -127,9 +125,11 @@ and clients can call it using any one of:
 
 那么调用者可以用以下形式调用它：
 
-	  Map.find("foo");                 // 查找"foo"
-	  Map.find(std::string("bar"));    // 查找"bar"
-	  Map.find(StringRef("\0baz", 4)); // 查找"\0baz"
+```
+Map.find("foo");                 // 查找"foo"
+Map.find(std::string("bar"));    // 查找"bar"
+Map.find(StringRef("\0baz", 4)); // 查找"\0baz"
+```
 Similarly, APIs which need to return a string may return a StringRef instance, which can be used directly or converted to an std::string using the str member function. See "[llvm/ADT/StringRef.h]("http://llvm.org/doxygen/classllvm_1_1StringRef_8h-source.html")" for more information.
 
 与此类似，当需要返回字符串时，可以返回StringRef实例，调用者可以直接使用StringRef实例，也可以调用它的str函数来转成std::string。更多信息可以查看"[llvm/ADT/StringRef.h]("http://llvm.org/doxygen/classllvm_1_1StringRef_8h-source.html")"。
@@ -176,10 +176,12 @@ Then you can run your pass like this:
 
 这样，可以这样运行程序：
 
-	$ opt < a.bc > /dev/null -mypass
-	<no output>
-	$ opt < a.bc > /dev/null -mypass -debug
-	I am here!
+```
+$ opt < a.bc > /dev/null -mypass
+<no output>
+$ opt < a.bc > /dev/null -mypass -debug
+I am here!
+```
 Using the DEBUG() macro instead of a home-brewed solution allows you to not have to create "yet another" command line option for the debug output for your pass. Note that DEBUG() macros are disabled for optimized builds, so they do not cause a performance impact at all (for the same reason, they should also not contain side-effects!).
 
 用DEBUG()宏取代其它的方式，则可以不用在命令行上使用其它参数来控制输出。值得注意的是，使用优化参数编译程序时，DEBUG()宏会被禁用，所以完全不用担心它会影响程序性能(同样，它们也不会导致[副效应]("http://en.wikipedia.org/wiki/Side_effect_(computer_science)"))。
@@ -194,31 +196,35 @@ Sometimes you may find yourself in a situation where enabling -debug just turns 
 
 有时候我们发现开启-debug选项后，会产生过多的调试信息(例如在开发代码生成器时)。如果使用DEBUG_TYPE宏和-debug-only选项对调试信息进行分类，则可以很好地整理这些调试信息了：
 
-	#undef  DEBUG_TYPE
-	DEBUG(errs() << "No debug type\n");
-	#define DEBUG_TYPE "foo"
-	DEBUG(errs() << "'foo' debug type\n");
-	#undef  DEBUG_TYPE
-	#define DEBUG_TYPE "bar"
-	DEBUG(errs() << "'bar' debug type\n"));
-	#undef  DEBUG_TYPE
-	#define DEBUG_TYPE ""
-	DEBUG(errs() << "No debug type (2)\n");
+```
+#undef  DEBUG_TYPE
+DEBUG(errs() << "No debug type\n");
+#define DEBUG_TYPE "foo"
+DEBUG(errs() << "'foo' debug type\n");
+#undef  DEBUG_TYPE
+#define DEBUG_TYPE "bar"
+DEBUG(errs() << "'bar' debug type\n"));
+#undef  DEBUG_TYPE
+#define DEBUG_TYPE ""
+DEBUG(errs() << "No debug type (2)\n");
+```
 Then you can run your pass like this:
 
 之后可以这样运行程序：
 
-	$ opt < a.bc > /dev/null -mypass
-	<no output>
-	$ opt < a.bc > /dev/null -mypass -debug
-	No debug type
-	'foo' debug type
-	'bar' debug type
-	No debug type (2)
-	$ opt < a.bc > /dev/null -mypass -debug-only=foo
-	'foo' debug type
-	$ opt < a.bc > /dev/null -mypass -debug-only=bar
-	'bar' debug type
+```
+$ opt < a.bc > /dev/null -mypass
+<no output>
+$ opt < a.bc > /dev/null -mypass -debug
+No debug type
+'foo' debug type
+'bar' debug type
+No debug type (2)
+$ opt < a.bc > /dev/null -mypass -debug-only=foo
+'foo' debug type
+$ opt < a.bc > /dev/null -mypass -debug-only=bar
+'bar' debug type
+```
 Of course, in practice, you should only set DEBUG_TYPE at the top of a file, to specify the debug type for the entire module (if you do this before you #include "llvm/Support/Debug.h", you don't have to insert the ugly #undef's). Also, you should use names more meaningful than "foo" and "bar", because there is no system in place to ensure that names do not conflict. If two different modules use the same string, they will all be turned on when the name is specified. This allows, for example, all debug information for instruction scheduling to be enabled with -debug-type=InstrSched, even if the source lives in multiple files.
 
 当然，在实际操作当中，只需要在文件开始设置DEBUG_TYPE宏即可，这样可以让它对整个模块都生效(前提是要把它放在#include "llvm/Support/Debug.h"之前)。由于LLVM没有为DEBUG_TYPE提供冲突检测机制，所以我们应该使用比"foo"或"bar"更有意义的分类名。如果两个不同的模块使用了相同的分类名，则它们的调试信息会同时输出。...
@@ -227,10 +233,12 @@ The DEBUG_WITH_TYPE macro is also available for situations where you would like 
 
 如果只想为单独的一句设置分类名，则可以使用DEBUG_WITH_TYPE宏，该宏的第一个参数即为分类名。上一个例子可以用该宏简化成如下：
 
-	DEBUG_WITH_TYPE("", errs() << "No debug type\n");
-	DEBUG_WITH_TYPE("foo", errs() << "'foo' debug type\n");
-	DEBUG_WITH_TYPE("bar", errs() << "'bar' debug type\n"));
-	DEBUG_WITH_TYPE("", errs() << "No debug type (2)\n");
+```
+DEBUG_WITH_TYPE("", errs() << "No debug type\n");
+DEBUG_WITH_TYPE("foo", errs() << "'foo' debug type\n");
+DEBUG_WITH_TYPE("bar", errs() << "'bar' debug type\n"));
+DEBUG_WITH_TYPE("", errs() << "No debug type (2)\n");
+```
 
 ### Statistic类和-stats选项
 
@@ -248,51 +256,55 @@ Statistic的例子非常多，不过最基本的用法是这样的：
 
 1. 用如下方式自定义Statistic:
 
-		#define DEBUG_TYPE "mypassname"   // This goes before any #includes.
-		STATISTIC(NumXForms, "The # of times I did stuff");
-The STATISTIC macro defines a static variable, whose name is specified by the first argument. The pass name is taken from the DEBUG_TYPE macro, and the description is taken from the second argument. The variable defined ("NumXForms" in this case) acts like an unsigned integer.
+		#define DEBUG_TYPE "mypassname"   // This goes before any #include		s.
+		STATISTIC(NumXForms, "The # of times I did stuff
+The STATISTIC macro defines a static variable, whose name is specified by the first argument. The pass name is taken from the DEBUG_TYPE macro, and the description is taken from the second argument. The variable defined ("NumXForms" in this case) acts like an unsigned integer.  
 DEBUG_TYPE宏定义了调试信息的分类，STATISTIC宏的第一个参数定义了一个静态变量，第二个参数是统计描述信息。静态变量(本例中的NumXForms)的类型是无符号整数。
 
 1. Whenever you make a transformation, bump the counter:
-1. 在任何有改动的地方都增加计数器：
+1. 在任何有改动的地方都增加计数：
 
-		++NumXForms;   // I did stuff!
+`++NumXForms;   // I did stuff!`
 
 That's all you have to do. To get 'opt' to print out the statistics gathered, use the '-stats' option:
 
 搞定。使用-stats选项，让程序输出收集到的统计信息：
 
-	$ opt -stats -mypassname < program.bc > /dev/null
-	... statistics output ...
+```
+$ opt -stats -mypassname < program.bc > /dev/null
+... statistics output ...
+```
 When running opt on a C file from the SPEC benchmark suite, it gives a report that looks like this:
 
 对一个SPEC benchmark suite里的C文件进行编译，结果如下：
 
-	   7646 bitcodewriter   - Number of normal instructions
-	    725 bitcodewriter   - Number of oversized instructions
-	 129996 bitcodewriter   - Number of bitcode bytes written
-	   2817 raise           - Number of insts DCEd or constprop'd
-	   3213 raise           - Number of cast-of-self removed
-	   5046 raise           - Number of expression trees converted
-	     75 raise           - Number of other getelementptr's formed
-	    138 raise           - Number of load/store peepholes
-	     42 deadtypeelim    - Number of unused typenames removed from symtab
-	    392 funcresolve     - Number of varargs functions resolved
-	     27 globaldce       - Number of global variables removed
-	      2 adce            - Number of basic blocks removed
-	    134 cee             - Number of branches revectored
-	     49 cee             - Number of setcc instruction eliminated
-	    532 gcse            - Number of loads removed
-	   2919 gcse            - Number of instructions removed
-	     86 indvars         - Number of canonical indvars added
-	     87 indvars         - Number of aux indvars removed
-	     25 instcombine     - Number of dead inst eliminate
-	    434 instcombine     - Number of insts combined
-	    248 licm            - Number of load insts hoisted
-	   1298 licm            - Number of insts hoisted to a loop pre-header
-	      3 licm            - Number of insts hoisted to multiple loop preds (bad, no loop pre-header)
-	     75 mem2reg         - Number of alloca's promoted
-	   1444 cfgsimplify     - Number of blocks simplified
+```
+   7646 bitcodewriter   - Number of normal instructions
+    725 bitcodewriter   - Number of oversized instructions
+ 129996 bitcodewriter   - Number of bitcode bytes written
+   2817 raise           - Number of insts DCEd or constprop'd
+   3213 raise           - Number of cast-of-self removed
+   5046 raise           - Number of expression trees converted
+     75 raise           - Number of other getelementptr's formed
+    138 raise           - Number of load/store peepholes
+     42 deadtypeelim    - Number of unused typenames removed from symtab
+    392 funcresolve     - Number of varargs functions resolved
+     27 globaldce       - Number of global variables removed
+      2 adce            - Number of basic blocks removed
+    134 cee             - Number of branches revectored
+     49 cee             - Number of setcc instruction eliminated
+    532 gcse            - Number of loads removed
+   2919 gcse            - Number of instructions removed
+     86 indvars         - Number of canonical indvars added
+     87 indvars         - Number of aux indvars removed
+     25 instcombine     - Number of dead inst eliminate
+    434 instcombine     - Number of insts combined
+    248 licm            - Number of load insts hoisted
+   1298 licm            - Number of insts hoisted to a loop pre-header
+      3 licm            - Number of insts hoisted to multiple loop preds (bad, no loop pre-header)
+     75 mem2reg         - Number of alloca's promoted
+   1444 cfgsimplify     - Number of blocks simplified
+```
 Obviously, with so many optimizations, having a unified framework for this stuff is very nice. Making your pass fit well into the framework makes it more maintainable and useful.
 
 显而易见，这种统一的框架很好的显示了如此多的优化结果。使用该框架将会使我们的程序更具可维护性。
