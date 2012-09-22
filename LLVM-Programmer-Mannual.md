@@ -51,7 +51,7 @@ Here we highlight some LLVM APIs that are generally useful and good to know abou
 
 The LLVM source-base makes extensive use of a custom form of RTTI. These templates have many similarities to the C++ dynamic_cast<> operator, but they don't have some drawbacks (primarily stemming from the fact that dynamic_cast<> only works on classes that have a v-table). Because they are used so often, you must know what they do and how they work. All of these templates are defined in the [llvm/Support/Casting.h]("http://llvm.org/doxygen/Casting_8h-source.html") file (note that you very rarely have to include this file directly).
 
-LLVM有一些自定义模板来表示运行时类型信息(RTTI)，并在源码中广泛使用。这些模板跟C++的dynamic_cast<>操作符很相似，但却没有它的一些缺点(dynamic_cast<>只能对有v-table的类使用)。所以，了解这些模板并清楚它们的工作原理是非常有必要的。所有的模板的定义都在文件[llvm/Support/Casting.h]("http://llvm.org/doxygen/Casting_8h-source.html")中，不过你通常不用直接include它。
+LLVM有一些自定义模板来实现运行时类型识别(RTTI)，并在源码中广泛使用。这些模板跟C++的dynamic_cast<>操作符很相似，但却没有它的一些缺点(dynamic_cast<>只能对有v-table的类使用)。所以，了解这些模板并清楚它们的工作原理是非常有必要的。所有的模板的定义都在文件[llvm/Support/Casting.h]("http://llvm.org/doxygen/Casting_8h-source.html")中，不过你通常不用直接include它。
 
 * isa<>:
 The isa<> operator works exactly like the Java "instanceof" operator. It returns true or false depending on whether a reference or pointer points to an instance of the specified class. This can be very useful for constraint checking of various sorts (example below).
@@ -83,7 +83,7 @@ The dyn_cast<> operator is a "checking cast" operation. It checks to see if the 
 		}
 		This form of the if statement effectively combines together a call to isa<> and a call to cast<> into one statement, which is very convenient.
 Note that the dyn_cast<> operator, like C++'s dynamic_cast<> or Java's instanceof operator, can be abused. In particular, you should not use big chained if/then/else blocks to check for lots of different variants of classes. If you find yourself wanting to do this, it is much cleaner and more efficient to use the InstVisitor class to dispatch over the instruction type directly.  
-**注意**: dyn_cast<>可能会像C++的dynamic_cast<>和Java中的instanceof一样被滥用。通常来说，我们不应该用一长串if/then/else来进行变量的类型判断。如果非如此不可，那么使用InstVisitor类来实现…
+**注意**: dyn_cast<>可能会像C++的dynamic_cast<>和Java中的instanceof一样被滥用。通常来说，我们不应该用一长串if/then/else来进行变量的类型判断。如果非如此不可，那么使用InstVisitor类来实现__TBD__
 
 cast_or_null<>:
 The cast_or_null<> operator works just like the cast<> operator, except that it allows for a null pointer as an argument (which it then propagates). This can sometimes be useful, allowing you to combine several null checks into one.
@@ -317,7 +317,7 @@ LLVM中几种重要的数据结构是以图表示的，例如由[BasicBlock]("#B
 
 LLVM provides several callbacks that are available in a debug build to do exactly that. If you call the Function::viewCFG() method, for example, the current LLVM tool will pop up a window containing the CFG for the function where each basic block is a node in the graph, and each node contains the instructions in the block. Similarly, there also exists Function::viewCFGOnly() (does not include the instructions), the MachineFunction::viewCFG() and MachineFunction::viewCFGOnly(), and the SelectionDAG::viewGraph() methods. Within GDB, for example, you can usually use something like call DAG.viewGraph() to pop up a window. Alternatively, you can sprinkle calls to these functions in your code in places you want to debug.
 
-LLVM提供了几个回调函数来实现该功能，它们只在调试模式下有效。比如当调用Function::viewCFG()方法时，当前的LLVM工具会弹出一个窗口来显示流程控制图，该图…。同样，LLVM还提供了Function::viewCFGOnly()(不显示指令)、MachineFunction::viewCFG()、MachineFunction::viewCFGOnly()、SelectionDAG::viewGraph()这些方法。在GDB中，通常可以使用call DAG.viewGraph()来弹出窗口。当然，也可以它们放在代码里面，以便调试时使用。
+LLVM提供了几个回调函数来实现该功能，它们只在调试模式下有效。比如当调用Function::viewCFG()方法时，当前的LLVM工具会弹出一个窗口来显示流程控制图，该图__TBD__。同样，LLVM还提供了Function::viewCFGOnly()(不显示指令)、MachineFunction::viewCFG()、MachineFunction::viewCFGOnly()、SelectionDAG::viewGraph()这些方法。在GDB中，通常可以使用call DAG.viewGraph()来弹出窗口。当然，也可以它们放在代码里面，以便调试时使用。
 
 Getting this to work requires a small amount of configuration. On Unix systems with X11, install the graphviz toolkit, and make sure 'dot' and 'gv' are in your path. If you are running on Mac OS/X, download and install the Mac OS/X Graphviz program, and add /Applications/Graphviz.app/Contents/MacOS/ (or wherever you install it) to your path. Once in your system and path are set up, rerun the LLVM configure script and rebuild LLVM to enable this functionality.
 
@@ -354,11 +354,11 @@ The first step is a choose your own adventure: do you want a sequential containe
 [字符串容器]("http://llvm.org/~matt/llvm/ProgrammersManual.html#ds_string")一个特殊的有序类容器或引用结构，它用于存放字符数组或字节数组。
 
 * a bit container provides an efficient way to store and perform set operations on sets of numeric id's, while automatically eliminating duplicates. Bit containers require a maximum of 1 bit for each identifier you want to store.  
-[比特位容器]("http://llvm.org/~matt/llvm/ProgrammersManual.html#ds_bit")…
+[比特位容器]("http://llvm.org/~matt/llvm/ProgrammersManual.html#ds_bit")__TBD__
 
 Once the proper category of container is determined, you can fine tune the memory use, constant factors, and cache behaviors of access by intelligently picking a member of the category. Note that constant factors and cache behavior can be a big deal. If you have a vector that usually only contains a few elements (but could contain many), for example, it's much better to use SmallVector than vector . Doing so avoids (relatively) expensive malloc/free calls, which dwarf the cost of adding the elements to the container.
 
-选定分类后，就可以在分类里根据内存使用，常量因素和缓存模式来选择具体的容器了，其中常量因素和缓存模式是…。如果容器中只需要存放少量的元素，那么使用SmallVector要比vector好，因为相对而言，SmallVector能减少对malloc/free的调用，…
+选定分类后，就可以在分类里根据内存使用，常量因素和缓存模式来选择具体的容器了，其中常量因素和缓存模式是__TBD__。如果容器中只需要存放少量的元素，那么使用SmallVector要比vector好，因为相对而言，SmallVector能减少对malloc/free的调用，
 
 ### Sequential Containers (std::vector, std::list, etc) 有序类容器(std::vector, std::list等)
 
@@ -447,37 +447,59 @@ Doing so will save (at least) one heap allocation and free per iteration of the 
 
 这样做可以(至少)省去一次内存分配的开销，并且可以避免每次循环结束时都会释放容器的内存空间。
 
-#### <deque>
+
+#### \<deque>
 
 std::deque is, in some senses, a generalized version of std::vector. Like std::vector, it provides constant time random access and other similar properties, but it also provides efficient access to the front of the list. It does not guarantee continuity of elements within memory.
 
+从某种意义上说，std::deque是std::vector更一般化的版本。所以std::deque也可以像vector一样提供性能为O(1)的随机访问和一些其它类似的特性，不同的是，std::deque还能提供快速访问数组头部(译注：push_front/pop_front)，并且它不会保证数据在内存中的连续性。
+
 In exchange for this extra flexibility, std::deque has significantly higher constant factor costs than std::vector. If possible, use std::vector or something cheaper.
 
-<list>
+相比std::vector来说，std::deque虽然提供了上述灵活性，但它的开销也相对大得多。如果可以的话，尽量使用std::vector或其它开销更小的容器。
+
+#### \<list>
 
 std::list is an extremely inefficient class that is rarely useful. It performs a heap allocation for every element inserted into it, thus having an extremely high constant factor, particularly for small data types. std::list also only supports bidirectional iteration, not random access iteration.
 
+std::list是一个效率非常低下的容器类，所以用得很少。__TBD__ 
+
 In exchange for this high cost, std::list supports efficient access to both ends of the list (like std::deque, but unlike std::vector or SmallVector). In addition, the iterator invalidation characteristics of std::list are stronger than that of a vector class: inserting or removing an element into the list does not invalidate iterator or pointers to other elements in the list.
 
-llvm/ADT/ilist.h
+虽然std::list的开销比较高，但却能够快速访问容器的首部和尾部(类似于std::deque，而std::vector和SmallVector不行)。同时，__TBD__
+
+#### llvm/ADT/ilist.h
 
 ilist<T> implements an 'intrusive' doubly-linked list. It is intrusive, because it requires the element to store and provide access to the prev/next pointers for the list.
 
+ilist\<T>实现了一个"侵入式"的双向链表，之所以这样说，是因为它要求每个元素都必须保存相邻元素的指针，同时还必须把这两个指针暴露给ilist\<T>。
+
 ilist has the same drawbacks as std::list, and additionally requires an ilist_traits implementation for the element type, but it provides some novel characteristics. In particular, it can efficiently store polymorphic objects, the traits class is informed when an element is inserted or removed from the list, and ilists are guaranteed to support a constant-time splice operation.
+
+ilist不仅有跟std::list一样的缺点，而且还要求__TBD__，不过这一点却使得ilist与众不同：可以存放__TBD__，因为当添加或删除元素时会触发相应的trait类。同时，ilist也支持常量时间的连接操作。
 
 These properties are exactly what we want for things like Instructions and basic blocks, which is why these are implemented with ilists.
 
+对于像Instruction和基本语句块来说，使用ilist作容器是再合适不过了，这也是为什么它们都是使用ilist实现的。
+
 Related classes of interest are explained in the following subsections:
-ilist_traits
-iplist
-llvm/ADT/ilist_node.h
-Sentinels
-llvm/ADT/PackedVector.h
+
+如果有兴趣的话可以参考以下相关类：
+
+* ilist_traits
+* iplist
+* llvm/ADT/ilist_node.h
+* Sentinels
+
+#### llvm/ADT/PackedVector.h
 
 Useful for storing a vector of values using only a few number of bits for each value. Apart from the standard operations of a vector-like container, it can also perform an 'or' set operation.
 
+PackedVector是一个用于存放少量比特位的容器，它不仅提供了类似于vector容器的标准方法外，还提供了__TBD__
+
 For example:
 
+```
 enum State {
     None = 0x0,
     FirstCondition = 0x1,
@@ -495,37 +517,63 @@ State get() {
     Vec1 |= Vec2;
     return Vec1[0]; // returns 'Both'.
 }
-ilist_traits
+```
+
+#### ilist_traits
 
 ilist_traits<T> is ilist<T>'s customization mechanism. iplist<T> (and consequently ilist<T>) publicly derive from this traits class.
 
-iplist
+ilist_traits\<T>为ilist\<T>提供了可定制的机制。iplist\<T>(当然还有ilist\<T>)就是继承自这个特性类。
+
+#### iplist
 
 iplist<T> is ilist<T>'s base and as such supports a slightly narrower interface. Notably, inserters from T& are absent.
 
+iplist\<T>是ilist\<T>的基类，所以它提供了相对较少__TBD__
+
 ilist_traits<T> is a public base of this class and can be used for a wide variety of customizations.
 
-llvm/ADT/ilist_node.h
+ilist_traits\<T>是iplist\<T>的其中一个public基类，它能提供非常多的可定制性。
+
+#### llvm/ADT/ilist_node.h
 
 ilist_node<T> implements a the forward and backward links that are expected by the ilist<T> (and analogous containers) in the default manner.
 
+ilist_node\<T>内包括了指向前/后继的的指针，这正是ilist\<T>(以及类似的容器) __TBD__
+
 ilist_node<T>s are meant to be embedded in the node type T, usually T publicly derives from ilist_node<T>.
 
-Sentinels
+ilist_node\<T>用于存放__TBD__
+
+#### Sentinels
 
 ilists have another specialty that must be considered. To be a good citizen in the C++ ecosystem, it needs to support the standard container operations, such as begin and end iterators, etc. Also, the operator-- must work correctly on the end iterator in the case of non-empty ilists.
 
+ilist还有一个特点是需要注意的。作为C++生态系统中的良好市民，它需要支持标准的容器操作，例如取得头部和尾部的迭代器等。同时，在非空的ilist中，对它的尾部迭代器执行--运算也必须得到正确的结果(译注：即最后一个元素)。
+
 The only sensible solution to this problem is to allocate a so-called sentinel along with the intrusive list, which serves as the end iterator, providing the back-link to the last element. However conforming to the C++ convention it is illegal to operator++ beyond the sentinel and it also must not be dereferenced.
+
+要解决这个问题，唯一明智的方法是在容器尾部插入一个所谓的"哨兵"元素，并用它作为容器的尾部迭代器。但是，为了使其使用更简便，对Sentinel元素的++运算是非法的，且不能derefenrence。
 
 These constraints allow for some implementation freedom to the ilist how to allocate and store the sentinel. The corresponding policy is dictated by ilist_traits<T>. By default a T gets heap-allocated whenever the need for a sentinel arises.
 
+上述约定给予了ilist一些自由，让其自行决定如何分配和保存哨兵元素。正常的策略是使用ilist_traits\<T>，在默认情况下，当需要使用哨兵元素时，容器会为其分配空间。
+
 While the default policy is sufficient in most cases, it may break down when T does not provide a default constructor. Also, in the case of many instances of ilists, the memory overhead of the associated sentinels is wasted. To alleviate the situation with numerous and voluminous T-sentinels, sometimes a trick is employed, leading to ghostly sentinels.
+
+虽然默认的策略已经能够大多数情况了，不过当T没有默认构造函数时就行不通了。另外，当程序创建了大量的ilist实例时，为每个实例都分配一个哨兵元素的话就会显得很浪费。所以，为了缓解过多的T类型的哨兵元素，通常会巧妙地使用幽灵哨兵元素。
 
 Ghostly sentinels are obtained by specially-crafted ilist_traits<T> which superpose the sentinel with the ilist instance in memory. Pointer arithmetic is used to obtain the sentinel, which is relative to the ilist's this pointer. The ilist is augmented by an extra pointer, which serves as the back-link of the sentinel. This is the only field in the ghostly sentinel which can be legally accessed.
 
-Other Sequential Container options
+幽灵哨兵是一个精心设计的ilist_traits\<T>，不同的实例可以重复使用。__TBD__
+
+#### Other Sequential Container options 其它的有序类容器
 
 Other STL containers are available, such as std::string.
 
+其它的STL容器也是可用的，比如std::string。
+
 There are also various STL adapter classes such as std::queue, std::priority_queue, std::stack, etc. These provide simplified access to an underlying container but don't affect the cost of the container itself.
+
+当然还有一些STL适配类，比如std::queue、std::priority_queue、std::stack等。__TBD__
 
