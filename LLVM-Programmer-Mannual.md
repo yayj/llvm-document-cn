@@ -684,33 +684,45 @@ Set-like containers are useful when you need to canonicalize multiple values int
 
 If you intend to insert a lot of elements, then do a lot of queries, a great approach is to use a vector (or other sequential container) with std::sort+std::unique to remove duplicates. This approach works really well if your usage pattern has these two distinct phases (insert then query), and can be coupled with a good choice of sequential container.
 
-如果是先向向容器中插入大量元素，之后再执行大量的查询操作的话，一个不错的方法是使用vector(或其它的有序类容器)作为容器，并通过std::sort和std::unique算法删除重复的元素。
+如果是先向向容器中插入大量元素，之后再执行大量的查询操作的话，一个不错的方法是使用vector(或其它的有序类容器)作为容器，并通过std::sort和std::unique算法删除重复的元素。如果整个过程能分成两个清晰的阶段(先插入后查询)，那么这种方式会非常有效，而具体的容器可以选用有序类容器。
 
 This combination provides the several nice properties: the result data is contiguous in memory (good for cache locality), has few allocations, is easy to address (iterators in the final vector are just indices or pointers), and can be efficiently queried with a standard binary or radix search.
 
-"llvm/ADT/SmallSet.h"
+这种组合有这样几个优点：最终结果在内存中是连续存放的(适合本地缓存__TBD__)，很少的内存分配，容易寻址(可以直接使用最终结果里的iterator进行遍历)，通过标准的二分法查找和基数查找实现高效率的查询。
+
+#### "llvm/ADT/SmallSet.h"
 
 If you have a set-like data structure that is usually small and whose elements are reasonably small, a SmallSet<Type, N> is a good choice. This set has space for N elements in place (thus, if the set is dynamically smaller than N, no malloc traffic is required) and accesses them with a simple linear search. When the set grows beyond 'N' elements, it allocates a more expensive representation that guarantees efficient access (for most types, it falls back to std::set, but for pointers it uses something far better, SmallPtrSet).
 
+如果容器的容量通常不大，而且每个元素也相对较小，那个SmallSet<Type, N>将是个很好的选择。这个集合最多可以存放N个元素(如果实际使用量小于N，就不需要内存分配了)，其搜索方式是简单的线性搜索。如果元素的个数超过了N，它会申请__TBD__(对大多数类型来说，这样就退化到std::set了，不过对指针类型来说，SmallPtrSet会更好)。
+
 The magic of this class is that it handles small sets extremely efficiently, but gracefully handles extremely large sets without loss of efficiency. The drawback is that the interface is quite small: it supports insertion, queries and erasing, but does not support iteration.
 
-"llvm/ADT/SmallPtrSet.h"
+SmallSet不可思议的地方是，当处理少量元素时，它的效率非常地高，而处理大量元素时，效率也不会有损失。这个容器的缺点是它的接口面很小，只支持插入、查询和删除，但不支持迭代。
+
+#### "llvm/ADT/SmallPtrSet.h"
 
 SmallPtrSet has all the advantages of SmallSet (and a SmallSet of pointers is transparently implemented with a SmallPtrSet), but also supports iterators. If more than 'N' insertions are performed, a single quadratically probed hash table is allocated and grows as needed, providing extremely efficient access (constant time insertion/deleting/queries with low constant factors) and is very stingy with malloc traffic.
 
+SmallPtrSet具有SmallSet的所有优点(__TBD__)，另外它还提供了迭代器。如果插入的元素超过了N，SmallPtrSet会生成一个使用二次探测算法的哈希表，并借此提供快速访问能力(常数级的插入/删除/查询)，同时，它也几乎没有malloc带来的开销。
+
 Note that, unlike std::set, the iterators of SmallPtrSet are invalidated whenever an insertion occurs. Also, the values visited by the iterators are not visited in sorted order.
 
-"llvm/ADT/DenseSet.h"
+和std::set不一样的是，在每次插入操作后，SmallPtrSet的迭代器就会无效。所以，通过迭代器访问的顺序和排序后的顺序是不一致的。
+
+#### "llvm/ADT/DenseSet.h"
 
 DenseSet is a simple quadratically probed hash table. It excels at supporting small values: it uses a single allocation to hold all of the pairs that are currently inserted in the set. DenseSet is a great way to unique small values that are not simple pointers (use SmallPtrSet for pointers). Note that DenseSet has the same requirements for the value type that DenseMap has.
 
-"llvm/ADT/SparseSet.h"
+DenseSet实际上是一个使用二次探测算法的哈希表。它对小元素的支持很好，因为在插入元素时，它只进行一次内存分配。__TBD__
+
+#### "llvm/ADT/SparseSet.h"
 
 SparseSet holds a small number of objects identified by unsigned keys of moderate size. It uses a lot of memory, but provides operations that are almost as fast as a vector. Typical keys are physical registers, virtual registers, or numbered basic blocks.
 
 SparseSet is useful for algorithms that need very fast clear/find/insert/erase and fast iteration over small sets. It is not intended for building composite data structures.
 
-"llvm/ADT/FoldingSet.h"
+#### "llvm/ADT/FoldingSet.h"
 
 FoldingSet is an aggregate class that is really good at uniquing expensive-to-create or polymorphic objects. It is a combination of a chained hash table with intrusive links (uniqued objects are required to inherit from FoldingSetNode) that uses SmallVector as part of its ID process.
 
@@ -753,3 +765,154 @@ Other Set-Like Container Options
 The STL provides several other options, such as std::multiset and the various "hash_set" like containers (whether from C++ TR1 or from the SGI library). We never use hash_set and unordered_set because they are generally very expensive (each insertion requires a malloc) and very non-portable.
 
 std::multiset is useful if you're not interested in elimination of duplicates, but has all the drawbacks of std::set. A sorted vector (where you don't delete duplicate entries) or some other approach is almost always better.
+
+### Bit storage containers (BitVector, SparseBitVector)比特位容器(BitVector, SparseBitVector)
+
+Unlike the other containers, there are only two bit storage containers, and choosing when to use each is relatively straightforward.
+
+和其它容器不一样的是，比特位容器只有两个选择，而且选择的理由也相对直接。
+
+One additional option is std::vector<bool>: we discourage its use for two reasons 1) the implementation in many common compilers (e.g. commonly available versions of GCC) is extremely inefficient and 2) the C++ standards committee is likely to deprecate this container and/or change it significantly somehow. In any case, please don't use it.
+
+当然，std::vector\<bool>也是可行的，不过我们基于以下理由而不用它：1) 一些使用它的常见编译器(GCC)的效率非常低下，2) C++标准委员会可能会废除它，或者提供改进版。所以任何情况下都不要用它。
+
+#### BitVector
+
+The BitVector container provides a dynamic size set of bits for manipulation. It supports individual bit setting/testing, as well as set operations. The set operations take time O(size of bitvector), but operations are performed one word at a time, instead of one bit at a time. This makes the BitVector very fast for set operations compared to other containers. Use the BitVector when you expect the number of set bits to be high (IE a dense set).
+
+BitVector可容纳数量可变的比特位，并支持对它们的写入/检测操作。写入操作的时间复杂度是O(n)，但一次写入是写入一个词，而非一比特，这使得BitVector的写入速度比其它的容器要快。__TBD__
+
+#### SmallBitVector
+
+The SmallBitVector container provides the same interface as BitVector, but it is optimized for the case where only a small number of bits, less than 25 or so, are needed. It also transparently supports larger bit counts, but slightly less efficiently than a plain BitVector, so SmallBitVector should only be used when larger counts are rare.
+
+SmallBitVector提供的接口和BitVector一样，唯一不同的是它针对只有少量比特位的情况(少于25)做了优化。它同样也支持更多的比特位，只不过效率会不及BitVector，所以处理少量比特位时才使用SmallBitVector。
+
+At this time, SmallBitVector does not support set operations (and, or, xor), and its operator[] does not provide an assignable lvalue.
+
+当时？SmallBitVector不支持写入操作(and, or, xor)，并且它的[]运算结果也不能成为左值。
+
+#### SparseBitVector
+
+The SparseBitVector container is much like BitVector, with one major difference: Only the bits that are set, are stored. This makes the SparseBitVector much more space efficient than BitVector when the set is sparse, as well as making set operations O(number of set bits) instead of O(size of universe). The downside to the SparseBitVector is that setting and testing of random bits is O(N), and on large SparseBitVectors, this can be slower than BitVector. In our implementation, setting or testing bits in sorted order (either forwards or reverse) is O(1) worst case. Testing and setting bits within 128 bits (depends on size) of the current bit is also O(1). As a general statement, testing/setting bits in a SparseBitVector is O(distance away from last set bit).
+
+SparseBitVector和BitVector很相似，唯一不同的是，只有被设置了的比特位才会被存入容器。这使得在存储稀疏比特位时，SparseBitVector要比BitVector节省空间，同时，它的写入时间复杂度是O(已写入的比特数)，要低于O(n)。它的缺点是，对随机比特位的写入和检测的时间复杂度是O(n)，另外，对于较大的SparseBitVector来说，它们通常会比BitVecotr要慢一些。__TBD__
+
+## Helpful Hints for Common Operations 奇技淫巧
+
+This section describes how to perform some very simple transformations of LLVM code. This is meant to give examples of common idioms used, showing the practical side of LLVM transformations.
+
+本节描述了如何对LLVM代码进行简单的修改。本节会给出一些例子，它们通过一些常规手法来展现修改LLVM的一些特殊性。
+
+Because this is a "how-to" section, you should also read about the main classes that you will be working with. The Core LLVM Class Hierarchy Reference contains details and descriptions of the main classes that you should know about.
+
+因为本节的性质是how-to，那么要求读者对将会用到的主要类有一定的了解。LLVM核心类体系结构参考手册包括了它们的描述和细节。
+
+### Iterating over the BasicBlocks in a Function 遍历函数内的所有BasicBlock
+
+It's quite common to have a Function instance that you'd like to transform in some way; in particular, you'd like to manipulate its BasicBlocks. To facilitate this, you'll need to iterate over all of the BasicBlocks that constitute the Function. The following is an example that prints the name of a BasicBlock and the number of Instructions it contains:
+
+对一个Function实例进行某种操作应该是非常常见的了，特别是对它所包含的BasickBlock进行操作。简单起见，可能需要使用迭代器来遍历Function实例里所有的BasicBlock。下面的例子会依次打印出BasicBlock的名字和它所包含的指令数：
+
+```
+// func is a pointer to a Function instance
+for (Function::iterator i = func->begin(), e = func->end(); i != e; ++i)
+  // Print out the name of the basic block if it has one, and then the
+  // number of instructions that it contains
+  errs() << "Basic block (name=" << i->getName() << ") has "
+             << i->size() << " instructions.\n";
+```
+
+Note that i can be used as if it were a pointer for the purposes of invoking member functions of the Instruction class. This is because the indirection operator is overloaded for the iterator classes. In the above code, the expression i->size() is exactly equivalent to (*i).size() just like you'd expect.
+
+需要注意的是，我们可以把i想像成__TBD__，因为迭代器已经重载了指针运算符。在上面的代码中，i->size()和(*i).size()是等效的，这也正是我们所期望的。
+
+### Iterating over the Instructions in a BasicBlock 遍历BasicBlock里的所有Instruction
+
+Just like when dealing with BasicBlocks in Functions, it's easy to iterate over the individual instructions that make up BasicBlocks. Here's a code snippet that prints out each instruction in a BasicBlock:
+
+和遍历BasicBlock一样，对BasicBlock里的所有指令进行遍历也是很简单的。以下代码片断会依次打印出一个BasicBlock里的每个指令：
+
+```
+// blk is a pointer to a BasicBlock instance
+for (BasicBlock::iterator i = blk->begin(), e = blk->end(); i != e; ++i)
+   // The next statement works since operator<<(ostream&,...)
+   // is overloaded for Instruction&
+   errs() << *i << "\n";
+```
+
+However, this isn't really the best way to print out the contents of a BasicBlock! Since the ostream operators are overloaded for virtually anything you'll care about, you could have just invoked the print routine on the basic block itself: errs() << *blk << "\n";.
+
+不过，这不是打印BasicBlock内容的最好方式！因为ostream的运算符是经过重载的，所以直接打印语句块本身即可：`errs() << *blk << "\n";`。
+
+### Iterating over the Instructions in a Function 遍历函数内的所有指令
+
+If you're finding that you commonly iterate over a Function's BasicBlocks and then that BasicBlock's Instructions, InstIterator should be used instead. You'll need to include llvm/Support/InstIterator.h, and then instantiate InstIterators explicitly in your code. Here's a small example that shows how to dump all instructions in a function to the standard error stream:
+
+如果经常要通过Function的BasicBlock迭代器跟BasicBlock的Instruction迭代器嵌套的方式遍历函数里的所有指令，那么完全可以使用InstIterator来代替。只需要在源文件里包含"llvm/Support/InstIterator.h"，就可以在代码里直接使用它了。这个简短的例子将在标准错误上打印出函数里所有的指令：
+
+```
+#include "llvm/Support/InstIterator.h"
+
+// F is a pointer to a Function instance
+for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I)
+  errs() << *I << "\n";
+```
+
+Easy, isn't it? You can also use InstIterators to fill a work list with its initial contents. For example, if you wanted to initialize a work list to contain all instructions in a Function F, all you would need to do is something like:
+
+很简单吧，不是吗？当然你也可以把InstIterator存入一个列表中，并将它们作为列表的初始内容。举例来说，如果要把F函数里的所有指令作为一个列表的初始数据，只需要这样做：
+
+```
+std::set<Instruction*> worklist;
+// or better yet, SmallPtrSet<Instruction*, 64> worklist;
+
+for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I)
+   worklist.insert(&*I);
+```
+
+The STL set worklist would now contain all instructions in the Function pointed to by F.
+
+这样，worklist集合就包含了F函数里的所有指令了。
+
+### Turning an iterator into a class pointer (and vice-versa) 把迭代器转为类指针
+
+Sometimes, it'll be useful to grab a reference (or pointer) to a class instance when all you've got at hand is an iterator. Well, extracting a reference or a pointer from an iterator is very straight-forward. Assuming that i is a BasicBlock::iterator and j is a BasicBlock::const_iterator:
+
+有时候，我们手上持有一个迭代器，而实际上真正需要的是它对应类实例的引用(或指针)。在LLVM里，从迭代器里抽取出相应的引用或指针是非常简单的。假设i是一个BasicBlock::iterator，j是一个BasicBlock::const_iterator：
+
+```
+Instruction& inst = *i;   // Grab reference to instruction reference
+Instruction* pinst = &*i; // Grab pointer to instruction reference
+const Instruction& inst = *j;
+```
+
+However, the iterators you'll be working with in the LLVM framework are special: they will automatically convert to a ptr-to-instance type whenever they need to. Instead of dereferencing the iterator and then taking the address of the result, you can simply assign the iterator to the proper pointer type and you get the dereference and address-of operation as a result of the assignment (behind the scenes, this is a result of overloading casting mechanisms). Thus the last line of the last example,
+
+不过，LLVM框架里的迭代器是很特殊的：当需要的时候它们会自动转成实例的指针。所以实际上不需要采用先提领迭代器，之后再对其取地址这种方式，而是可以直接把迭代器赋给相应的指针类型即可(这背后其实是一个重载了的类型转换)。对于上例的中间一句(译注：原文是最后一句)：
+
+```
+Instruction *pinst = &*i;
+```
+
+is semantically equivalent to
+
+等价于：
+
+```
+Instruction *pinst = i;
+```
+
+It's also possible to turn a class pointer into the corresponding iterator, and this is a constant time operation (very efficient). The following code snippet illustrates use of the conversion constructors provided by LLVM iterators. By using these, you can explicitly grab the iterator of something without actually obtaining it via iteration over some structure:
+
+以上转换的反向转换也是可以的，即把类指针转为相应的迭代器，而且这个转换过程的时间开销还是常数级的(非常快)。下面的代码片断展示了迭代器构造函数的用法，采用该用法
+
+void printNextInstruction(Instruction* inst) {
+  BasicBlock::iterator it(inst);
+  ++it; // After this line, it refers to the instruction after *inst
+  if (it != inst->getParent()->end()) errs() << *it << "\n";
+}
+Unfortunately, these implicit conversions come at a cost; they prevent these iterators from conforming to standard iterator conventions, and thus from being usable with standard algorithms and containers. For example, they prevent the following code, where B is a BasicBlock, from compiling:
+
+  llvm::SmallVector<llvm::Instruction *, 16>(B->begin(), B->end());
+Because of this, these implicit conversions may be removed some day, and operator* changed to return a pointer instead of a reference.
