@@ -577,3 +577,179 @@ There are also various STL adapter classes such as std::queue, std::priority_que
 
 当然还有一些STL适配类，比如std::queue、std::priority_queue、std::stack等。__TBD__
 
+### String-like containers 字符串类容器
+
+There are a variety of ways to pass around and use strings in C and C++, and LLVM adds a few new options to choose from. Pick the first option on this list that will do what you need, they are ordered according to their relative cost.
+
+C/C++里有很多字符串的用法和传递方式，LLVM在其基础上增加了一些新选择。本节开始部分的描述了如何选择合适的容器，而下面将以开销的大小顺序来介绍它们。
+
+Note that is is generally preferred to not pass strings around as "const char*"'s. These have a number of problems, including the fact that they cannot represent embedded nul ("\0") characters, and do not have a length available efficiently. The general replacement for 'const char*' is StringRef.
+
+需要注意的是通常不要直接使用"const char *"类型来传递字符串，这可能会导致一大堆问题，例如字符串中不能包含空字符("\0")，不能快速取得字符串长度。一般来说可以使用StringRef来替代'const char *'.
+
+For more information on choosing string containers for APIs, please see Passing strings.
+
+更多信息可以跳至Passing strings。
+
+#### llvm/ADT/StringRef.h
+
+The StringRef class is a simple value class that contains a pointer to a character and a length, and is quite related to the ArrayRef class (but specialized for arrays of characters). Because StringRef carries a length with it, it safely handles strings with embedded nul characters in it, getting the length does not require a strlen call, and it even has very convenient APIs for slicing and dicing the character range that it represents.
+
+StringRef的实现非常简单，它包含了一个字符串指针和字符串的长度，它是ArrayRef的特殊形式(数组元素是字符)。因为StringRef保存了字符串长度，所以可以安全地把空字符插入到字符串中，也不需要通过strlen函数来取得长度，而且还提供了一些非常方便的方法实现了__TBD__
+
+StringRef is ideal for passing simple strings around that are known to be live, either because they are C string literals, std::string, a C array, or a SmallVector. Each of these cases has an efficient implicit conversion to StringRef, which doesn't result in a dynamic strlen being executed.
+
+如果要传递一个已存在的字符串，StringRef将是非常理想的方式，无论它们是C风格字符串、std::string、C数组或是SmallVector。__TBD__
+
+StringRef has a few major limitations which make more powerful string containers useful:
+
+StringRef有一些限制：
+
+1. You cannot directly convert a StringRef to a 'const char*' because there is no way to add a trailing nul (unlike the .c_str() method on various stronger classes).  
+不能直接把StringRef转换成'const char\*'，因为__TBD__
+
+1. StringRef doesn't own or keep alive the underlying string bytes. As such it can easily lead to dangling pointers, and is not suitable for embedding in datastructures in most cases (instead, use an std::string or something like that).  
+StringRef不能自行保存字符串。这样它极有可能导致悬空指针，所以在大多数情况下是不适合放入到具体的数据结构里的(相反，std::string却很适合)。
+
+1. For the same reason, StringRef cannot be used as the return value of a method if the method "computes" the result string. Instead, use std::string.  
+同理，当函数需要"计算"出一个字符串结果时，StringRef也不也作为其返回值的类型。这个时候请使用std::string。
+
+1. StringRef's do not allow you to mutate the pointed-to string bytes and it doesn't allow you to insert or remove bytes from the range. For editing operations like this, it interoperates with the Twine class.  
+StringRef不允许修改它所保存的字符串。如果需要修改，它需要和Twine类配合使用。
+
+Because of its strengths and limitations, it is very common for a function to take a StringRef and for a method on an object to return a StringRef that points into some string that it owns.
+
+综上所述，StringRef通常作为函数的参数类型，也可以用作类成员函数的返回值，且返回的字符串必须是由类自身维护的。
+
+#### llvm/ADT/Twine.h
+
+The Twine class is used as an intermediary datatype for APIs that want to take a string that can be constructed inline with a series of concatenations. Twine works by forming recursive instances of the Twine datatype (a simple value object) on the stack as temporary objects, linking them together into a tree which is then linearized when the Twine is consumed. Twine is only safe to use as the argument to a function, and should always be a const reference, e.g.:
+
+如果函数的字符串参数需要通过一系列的字符串连接而得，那么Twine可以用作一种中间的数据类型。Twine在栈空间上生成一些临时对象，并把它们连接成树状结构，这样可以让Twine在使用的时候看上去是一个连续的字符串。Twine只能作为函数的参数类型，并且总是一个常量引用(const reference)，例如：
+
+````
+void foo(const Twine &T);
+...
+StringRef X = ...
+unsigned i = ...
+foo(X + "." + Twine(i));
+````
+  
+This example forms a string like "blarg.42" by concatenating the values together, and does not form intermediate strings containing "blarg" or "blarg.".
+
+该例子创建了一个形如"blarg.42"的字符串，该字符串是把3个字符串连接而得。但实际上，它并没有立即生成包含"blarg"或"blarg."的字符串。
+
+Because Twine is constructed with temporary objects on the stack, and because these instances are destroyed at the end of the current statement, it is an inherently dangerous API. For example, this simple variant contains undefined behavior and will probably crash:
+
+因为Twine是在栈上创建的临时对象，并且在当前语句结束时就会被销毁，所以它带有与生俱来的危险性。例如，以下代码片断的行为将是不可预知的，并且很可能导致程序崩溃：
+
+```
+void foo(const Twine &T);
+...
+StringRef X = ...
+unsigned i = ...
+const Twine &Tmp = X + "." + Twine(i);
+foo(Tmp);
+```
+  
+... because the temporaries are destroyed before the call. That said, Twine's are much more efficient than intermediate std::string temporaries, and they work really well with StringRef. Just be aware of their limitations.
+
+因为在函数调用之前，临时变量就会被销毁。也就是说，比起使用std::string作为临时的中间字符串来说，Twine显得更加高效，并且它能够很好地和StringRef配合使用。唯一的缺点就是需要注意以上所述的限制。
+
+#### llvm/ADT/SmallString.h
+
+SmallString is a subclass of SmallVector that adds some convenience APIs like += that takes StringRef's. SmallString avoids allocating memory in the case when the preallocated space is enough to hold its data, and it calls back to general heap allocation when required. Since it owns its data, it is very safe to use and supports full mutation of the string.
+
+SmallString是SmallVector的一个子类，它加入了一些很方便的API，比如+=操作，该操作可以连接StringRef。当SmallString预先分配的空间足够时，连接操作就可以避免二次内存分配。因为SmallString是自己保存字符串，所以它相对来说比较安全，并且可以支持字符串的修改。
+
+Like SmallVector's, the big downside to SmallString is their sizeof. While they are optimized for small strings, they themselves are not particularly small. This means that they work great for temporary scratch buffers on the stack, but should not generally be put into the heap: it is very rare to see a SmallString as the member of a frequently-allocated heap data structure or returned by-value.
+
+和SmallVector类似，SmallString的问题在于不能对其使用sizeof。同时，它们是专为短小的字符串进行了优化，而它们自身通常并不短小，这就意味着最好是在栈上使用它，而不是在堆上。所以，SmallString很少出现在需要在堆上频繁出现的数据结构里，也很少以by-value的方式作为函数的返回值。
+
+#### std::string
+
+The standard C++ std::string class is a very general class that (like SmallString) owns its underlying data. sizeof(std::string) is very reasonable so it can be embedded into heap data structures and returned by-value. On the other hand, std::string is highly inefficient for inline editing (e.g. concatenating a bunch of stuff together) and because it is provided by the standard library, its performance characteristics depend a lot of the host standard library (e.g. libc++ and MSVC provide a highly optimized string class, GCC contains a really slow implementation).
+
+C++标准库中的std::string是应用非常广泛的类，整个字符串会保存在std::string对象里(类似于SmallString)。对std::string使用sizeof是可行的，所以它完全可以嵌入到堆里的数据结构里，也可以作为以by-value方式的返回值。另一方面，当需要内联(inline)编辑(比如连接好几个字符串)时，使用std::string是非常不明智的。同时，std::string作为标准库的一部分，其性能几乎取决于本地的标准库(例如，libc++和MSVC提供了经过高度优化的string类，而GCC提供的版本运行起来却非常缓慢)。
+
+The major disadvantage of std::string is that almost every operation that makes them larger can allocate memory, which is slow. As such, it is better to use SmallVector or Twine as a scratch buffer, but then use std::string to persist the result.
+
+当然了，std::string最大的问题是，任何增长字符串的操作都会导致很慢的内存分配。在这种情况下，使用SmallVector或Twine更加理想，而std::string仅用于保存最终的结果。
+
+### Set-Like Containers (std::set, SmallSet, SetVector, etc)集合类容器(std::set, SmallSet, SetVector等)
+
+Set-like containers are useful when you need to canonicalize multiple values into a single representation. There are several different choices for how to do this, providing various trade-offs.
+
+#### A sorted 'vector' 已排序的vector
+
+If you intend to insert a lot of elements, then do a lot of queries, a great approach is to use a vector (or other sequential container) with std::sort+std::unique to remove duplicates. This approach works really well if your usage pattern has these two distinct phases (insert then query), and can be coupled with a good choice of sequential container.
+
+如果是先向向容器中插入大量元素，之后再执行大量的查询操作的话，一个不错的方法是使用vector(或其它的有序类容器)作为容器，并通过std::sort和std::unique算法删除重复的元素。
+
+This combination provides the several nice properties: the result data is contiguous in memory (good for cache locality), has few allocations, is easy to address (iterators in the final vector are just indices or pointers), and can be efficiently queried with a standard binary or radix search.
+
+"llvm/ADT/SmallSet.h"
+
+If you have a set-like data structure that is usually small and whose elements are reasonably small, a SmallSet<Type, N> is a good choice. This set has space for N elements in place (thus, if the set is dynamically smaller than N, no malloc traffic is required) and accesses them with a simple linear search. When the set grows beyond 'N' elements, it allocates a more expensive representation that guarantees efficient access (for most types, it falls back to std::set, but for pointers it uses something far better, SmallPtrSet).
+
+The magic of this class is that it handles small sets extremely efficiently, but gracefully handles extremely large sets without loss of efficiency. The drawback is that the interface is quite small: it supports insertion, queries and erasing, but does not support iteration.
+
+"llvm/ADT/SmallPtrSet.h"
+
+SmallPtrSet has all the advantages of SmallSet (and a SmallSet of pointers is transparently implemented with a SmallPtrSet), but also supports iterators. If more than 'N' insertions are performed, a single quadratically probed hash table is allocated and grows as needed, providing extremely efficient access (constant time insertion/deleting/queries with low constant factors) and is very stingy with malloc traffic.
+
+Note that, unlike std::set, the iterators of SmallPtrSet are invalidated whenever an insertion occurs. Also, the values visited by the iterators are not visited in sorted order.
+
+"llvm/ADT/DenseSet.h"
+
+DenseSet is a simple quadratically probed hash table. It excels at supporting small values: it uses a single allocation to hold all of the pairs that are currently inserted in the set. DenseSet is a great way to unique small values that are not simple pointers (use SmallPtrSet for pointers). Note that DenseSet has the same requirements for the value type that DenseMap has.
+
+"llvm/ADT/SparseSet.h"
+
+SparseSet holds a small number of objects identified by unsigned keys of moderate size. It uses a lot of memory, but provides operations that are almost as fast as a vector. Typical keys are physical registers, virtual registers, or numbered basic blocks.
+
+SparseSet is useful for algorithms that need very fast clear/find/insert/erase and fast iteration over small sets. It is not intended for building composite data structures.
+
+"llvm/ADT/FoldingSet.h"
+
+FoldingSet is an aggregate class that is really good at uniquing expensive-to-create or polymorphic objects. It is a combination of a chained hash table with intrusive links (uniqued objects are required to inherit from FoldingSetNode) that uses SmallVector as part of its ID process.
+
+Consider a case where you want to implement a "getOrCreateFoo" method for a complex object (for example, a node in the code generator). The client has a description of *what* it wants to generate (it knows the opcode and all the operands), but we don't want to 'new' a node, then try inserting it into a set only to find out it already exists, at which point we would have to delete it and return the node that already exists.
+
+To support this style of client, FoldingSet perform a query with a FoldingSetNodeID (which wraps SmallVector) that can be used to describe the element that we want to query for. The query either returns the element matching the ID or it returns an opaque ID that indicates where insertion should take place. Construction of the ID usually does not require heap traffic.
+
+Because FoldingSet uses intrusive links, it can support polymorphic objects in the set (for example, you can have SDNode instances mixed with LoadSDNodes). Because the elements are individually allocated, pointers to the elements are stable: inserting or removing elements does not invalidate any pointers to other elements.
+
+<set>
+
+std::set is a reasonable all-around set class, which is decent at many things but great at nothing. std::set allocates memory for each element inserted (thus it is very malloc intensive) and typically stores three pointers per element in the set (thus adding a large amount of per-element space overhead). It offers guaranteed log(n) performance, which is not particularly fast from a complexity standpoint (particularly if the elements of the set are expensive to compare, like strings), and has extremely high constant factors for lookup, insertion and removal.
+
+The advantages of std::set are that its iterators are stable (deleting or inserting an element from the set does not affect iterators or pointers to other elements) and that iteration over the set is guaranteed to be in sorted order. If the elements in the set are large, then the relative overhead of the pointers and malloc traffic is not a big deal, but if the elements of the set are small, std::set is almost never a good choice.
+
+"llvm/ADT/SetVector.h"
+
+LLVM's SetVector<Type> is an adapter class that combines your choice of a set-like container along with a Sequential Container. The important property that this provides is efficient insertion with uniquing (duplicate elements are ignored) with iteration support. It implements this by inserting elements into both a set-like container and the sequential container, using the set-like container for uniquing and the sequential container for iteration.
+
+The difference between SetVector and other sets is that the order of iteration is guaranteed to match the order of insertion into the SetVector. This property is really important for things like sets of pointers. Because pointer values are non-deterministic (e.g. vary across runs of the program on different machines), iterating over the pointers in the set will not be in a well-defined order.
+
+The drawback of SetVector is that it requires twice as much space as a normal set and has the sum of constant factors from the set-like container and the sequential container that it uses. Use it *only* if you need to iterate over the elements in a deterministic order. SetVector is also expensive to delete elements out of (linear time), unless you use it's "pop_back" method, which is faster.
+
+SetVector is an adapter class that defaults to using std::vector and a size 16 SmallSet for the underlying containers, so it is quite expensive. However, "llvm/ADT/SetVector.h" also provides a SmallSetVector class, which defaults to using a SmallVector and SmallSet of a specified size. If you use this, and if your sets are dynamically smaller than N, you will save a lot of heap traffic.
+
+"llvm/ADT/UniqueVector.h"
+
+UniqueVector is similar to SetVector, but it retains a unique ID for each element inserted into the set. It internally contains a map and a vector, and it assigns a unique ID for each value inserted into the set.
+
+UniqueVector is very expensive: its cost is the sum of the cost of maintaining both the map and vector, it has high complexity, high constant factors, and produces a lot of malloc traffic. It should be avoided.
+
+"llvm/ADT/ImmutableSet.h"
+
+ImmutableSet is an immutable (functional) set implementation based on an AVL tree. Adding or removing elements is done through a Factory object and results in the creation of a new ImmutableSet object. If an ImmutableSet already exists with the given contents, then the existing one is returned; equality is compared with a FoldingSetNodeID. The time and space complexity of add or remove operations is logarithmic in the size of the original set.
+
+There is no method for returning an element of the set, you can only check for membership.
+
+Other Set-Like Container Options
+
+The STL provides several other options, such as std::multiset and the various "hash_set" like containers (whether from C++ TR1 or from the SGI library). We never use hash_set and unordered_set because they are generally very expensive (each insertion requires a malloc) and very non-portable.
+
+std::multiset is useful if you're not interested in elimination of duplicates, but has all the drawbacks of std::set. A sorted vector (where you don't delete duplicate entries) or some other approach is almost always better.
