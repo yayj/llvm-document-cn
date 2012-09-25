@@ -808,7 +808,15 @@ Because this is a "how-to" section, you should also read about the main classes 
 
 因为本节的性质是how-to，那么要求读者对将会用到的主要类有一定的了解。LLVM核心类体系结构参考手册包括了它们的描述和细节。
 
-### Iterating over the BasicBlocks in a Function 遍历函数内的所有BasicBlock
+### Basic Inspection and Traversal Routines 基本的检查和遍历过程
+
+The LLVM compiler infrastructure have many different data structures that may be traversed. Following the example of the C++ standard template library, the techniques used to traverse these various data structures are all basically the same. For a enumerable sequence of values, the XXXbegin() function (or method) returns an iterator to the start of the sequence, the XXXend() function returns an iterator pointing to one past the last valid element of the sequence, and there is some XXXiterator data type that is common between the two operations.
+
+__TBD__
+
+Because the pattern for iteration is common across many different aspects of the program representation, the standard template library algorithms may be used on them, and it is easier to remember how to iterate. First we show a few common examples of the data structures that need to be traversed. Other data structures are traversed in very similar ways.
+
+#### Iterating over the BasicBlocks in a Function 遍历函数内的所有BasicBlock
 
 It's quite common to have a Function instance that you'd like to transform in some way; in particular, you'd like to manipulate its BasicBlocks. To facilitate this, you'll need to iterate over all of the BasicBlocks that constitute the Function. The following is an example that prints the name of a BasicBlock and the number of Instructions it contains:
 
@@ -827,7 +835,7 @@ Note that i can be used as if it were a pointer for the purposes of invoking mem
 
 需要注意的是，我们可以把i想像成__TBD__，因为迭代器已经重载了指针运算符。在上面的代码中，i->size()和(*i).size()是等效的，这也正是我们所期望的。
 
-### Iterating over the Instructions in a BasicBlock 遍历BasicBlock里的所有Instruction
+#### Iterating over the Instructions in a BasicBlock 遍历BasicBlock里的所有Instruction
 
 Just like when dealing with BasicBlocks in Functions, it's easy to iterate over the individual instructions that make up BasicBlocks. Here's a code snippet that prints out each instruction in a BasicBlock:
 
@@ -845,7 +853,7 @@ However, this isn't really the best way to print out the contents of a BasicBloc
 
 不过，这不是打印BasicBlock内容的最好方式！因为ostream的运算符是经过重载的，所以直接打印语句块本身即可：`errs() << *blk << "\n";`。
 
-### Iterating over the Instructions in a Function 遍历函数内的所有指令
+#### Iterating over the Instructions in a Function 遍历函数内的所有指令
 
 If you're finding that you commonly iterate over a Function's BasicBlocks and then that BasicBlock's Instructions, InstIterator should be used instead. You'll need to include llvm/Support/InstIterator.h, and then instantiate InstIterators explicitly in your code. Here's a small example that shows how to dump all instructions in a function to the standard error stream:
 
@@ -875,7 +883,7 @@ The STL set worklist would now contain all instructions in the Function pointed 
 
 这样，worklist集合就包含了F函数里的所有指令了。
 
-### Turning an iterator into a class pointer (and vice-versa) 把迭代器转为类指针
+#### Turning an iterator into a class pointer (and vice-versa) 把迭代器转为类指针
 
 Sometimes, it'll be useful to grab a reference (or pointer) to a class instance when all you've got at hand is an iterator. Well, extracting a reference or a pointer from an iterator is very straight-forward. Assuming that i is a BasicBlock::iterator and j is a BasicBlock::const_iterator:
 
@@ -905,14 +913,137 @@ Instruction *pinst = i;
 
 It's also possible to turn a class pointer into the corresponding iterator, and this is a constant time operation (very efficient). The following code snippet illustrates use of the conversion constructors provided by LLVM iterators. By using these, you can explicitly grab the iterator of something without actually obtaining it via iteration over some structure:
 
-以上转换的反向转换也是可以的，即把类指针转为相应的迭代器，而且这个转换过程的时间开销还是常数级的(非常快)。下面的代码片断展示了迭代器构造函数的用法，采用该用法
+把类指针转为相应的迭代器也是可以的，而且这个转换过程的时间开销还是常数级的(非常快)。下面的代码片断展示了使用指针来初始化迭代器，通过这种方式，我们可以显式地取得一个对象所对应的迭代器，而不需要到它所在的容器里去查找。
 
+```
 void printNextInstruction(Instruction* inst) {
   BasicBlock::iterator it(inst);
   ++it; // After this line, it refers to the instruction after *inst
   if (it != inst->getParent()->end()) errs() << *it << "\n";
 }
+```
+
 Unfortunately, these implicit conversions come at a cost; they prevent these iterators from conforming to standard iterator conventions, and thus from being usable with standard algorithms and containers. For example, they prevent the following code, where B is a BasicBlock, from compiling:
 
-  llvm::SmallVector<llvm::Instruction *, 16>(B->begin(), B->end());
+不幸的是，这些隐式类型转换带来了一个问题：因为通过这种方式创建的迭代器实际上是不符合迭代器的规范的，所以对它们不能参与标准算法，也没有相应的容器。在下例中，B是一个BasicBlock，而该句代码却不能通过编译：
+
+```
+llvm::SmallVector<llvm::Instruction *, 16>(B->begin(), B->end());
+```
+
 Because of this, these implicit conversions may be removed some day, and operator* changed to return a pointer instead of a reference.
+
+正因为如此，以上隐式类型转换在将来可能会被移除，*运算符的返回值也可能会用指针代替引用。
+
+#### Finding call sites: a slightly more complex example 查找函数调用：一个稍微复杂点的例子
+
+Say that you're writing a FunctionPass and would like to count all the locations in the entire module (that is, across every Function) where a certain function (i.e., some Function*) is already in scope. As you'll learn later, you may want to use an InstVisitor to accomplish this in a much more straight-forward manner, but this example will allow us to explore how you'd do it if you didn't have InstVisitor around. In pseudo-code, this is what we want to do:
+
+__TBD__在后面的章节会看到，使用InstVisitor可以更直接地完成这项任务。不过这个例子只是说明如何在不使用InstVisitor的情况下如何做到。下面的伪代码描述了整个过程：
+
+```
+initialize callCounter to zero
+for each Function f in the Module
+  for each BasicBlock b in f
+    for each Instruction i in b
+      if (i is a CallInst and calls the given function)
+        increment callCounter
+```
+
+And the actual code is (remember, because we're writing a FunctionPass, our FunctionPass-derived class simply has to override the runOnFunction method):
+
+以下是实际代码(请记住，因为我们是在编写一个FunctionPass，所以只需要继承FunctionPass类，并简单地重载runOnFunction方法即可)：
+
+```
+Function* targetFunc = ...;
+
+class OurFunctionPass : public FunctionPass {
+  public:
+    OurFunctionPass(): callCounter(0) { }
+
+    virtual runOnFunction(Function& F) {
+      for (Function::iterator b = F.begin(), be = F.end(); b != be; ++b) {
+        for (BasicBlock::iterator i = b->begin(), ie = b->end(); i != ie; ++i) {
+          if (CallInst* callInst = dyn_cast<CallInst>(&*i)) {
+            // We know we've encountered a call instruction, so we
+            // need to determine if it's a call to the
+            // function pointed to by m_func or not.
+            if (callInst->getCalledFunction() == targetFunc)
+              ++callCounter;
+          }
+        }
+      }
+    }
+
+  private:
+    unsigned callCounter;
+};
+```
+
+#### Treating calls and invokes the same way 统一call和invoke
+
+You may have noticed that the previous example was a bit oversimplified in that it did not deal with call sites generated by 'invoke' instructions. In this, and in other situations, you may find that you want to treat CallInsts and InvokeInsts the same way, even though their most-specific common base class is Instruction, which includes lots of less closely-related things. For these cases, LLVM provides a handy wrapper class called CallSite. It is essentially a wrapper around an Instruction pointer, with some methods that provide functionality common to CallInsts and InvokeInsts.
+
+在上例中，我们过于简化了一点，即没有处理由'invoke'指令产生的call。那么无论是这里，还是其它的情况下，我们都有可能希望通过一种统一的方式处理CallInst和InvokeInst，虽然它们的公共基类仅仅是最最基本的Instruction类。所以，LLVM提供了一个名为CallSite的包装类，它保存了一个Instruction指针，并向外提供一些CallInst和InvokeInst相同的方法。
+
+This class has "value semantics": it should be passed by value, not by reference and it should not be dynamically allocated or deallocated using operator new or operator delete. It is efficiently copyable, assignable and constructable, with costs equivalents to that of a bare pointer. If you look at its definition, it has only a single pointer member.
+
+__TBD__：它只能以传值的方式进行参数传递，而不能以引用方式。不能使用new或delete运算符进行动态内存分配或释放。它可以进行快速复制、赋值或创建，代价是多出一个悬挂指针，因为从它的定义可以知道，它实际上只有一个指针成员。
+
+#### Iterating over def-use & use-def chains 通过定义-使用映射和使用-定义映射进行迭代
+
+Frequently, we might have an instance of the Value Class and we want to determine which Users use the Value. The list of all Users of a particular Value is called a def-use chain. For example, let's say we have a Function* named F to a particular function foo. Finding all of the instructions that use foo is as simple as iterating over the def-use chain of F:
+
+在编译器里，通过一个具体的Value实例去查找所有使用它的User是非常频繁的，这个映射关系称为定义-使用映射。举例来说，Function *F指向函数foo，要查找所有调用foo的指令，只需要简单地使用F的定义-使用映射即可：
+
+```
+Function *F = ...;
+
+for (Value::use_iterator i = F->use_begin(), e = F->use_end(); i != e; ++i)
+  if (Instruction *Inst = dyn_cast<Instruction>(*i)) {
+    errs() << "F is used in instruction:\n";
+    errs() << *Inst << "\n";
+  }
+```
+
+Note that dereferencing a Value::use_iterator is not a very cheap operation. Instead of performing *i above several times, consider doing it only once in the loop body and reusing its result.
+
+需要注意的是，提领Value::use_iterator的运算开销并不小，所以不要多次执行该运算，可以在循环体内运行一次后把结果保存下来，供后面语句使用。
+
+Alternatively, it's common to have an instance of the User Class and need to know what Values are used by it. The list of all Values used by a User is known as a use-def chain. Instances of class Instruction are common Users, so we might want to iterate over all of the values that a particular instruction uses (that is, the operands of the particular Instruction):
+
+另外，通过User实例查找它所使用的Value也非常常见，这称为使用-定义映射。以下代码是通过一个指令得到它所有的操作数：
+
+```
+Instruction *pi = ...;
+
+for (User::op_iterator i = pi->op_begin(), e = pi->op_end(); i != e; ++i) {
+  Value *v = *i;
+  // ...
+}
+```
+
+Declaring objects as const is an important tool of enforcing mutation free algorithms (such as analyses, etc.). For this purpose above iterators come in constant flavors as Value::const_use_iterator and Value::const_op_iterator. They automatically arise when calling use/op_begin() on const Value*s or const User*s respectively. Upon dereferencing, they return const Use*s. Otherwise the above patterns remain unchanged.
+
+把对象声明为const，可以防止一些算法(例如分析算法等)去修改它们，所以也就有了const版的迭代器，Value::const_use_iterator和User::const_op_iterator(译注：原文为Value::const_op_iterator)。当迭代器被声明为const版本时，use/op_begin()的返回值会自动转成const Value \*s或const User \*s，如果提领这些迭代器，将得到const User \*s。这样可以保证对象不会被修改。
+
+#### Iterating over predecessors & successors of blocks 遍历语句块的前后继
+
+Iterating over the predecessors and successors of a block is quite easy with the routines defined in "llvm/Support/CFG.h". Just use code like this to iterate over all predecessors of BB:
+
+使用"llvm/Support/CFG.h"中的例程，我们可以非常简单地遍历语句块的前后继。下例遍历了BB的所有前继：
+
+```
+#include "llvm/Support/CFG.h"
+BasicBlock *BB = ...;
+
+for (pred_iterator PI = pred_begin(BB), E = pred_end(BB); PI != E; ++PI) {
+  BasicBlock *Pred = *PI;
+  // ...
+}
+```
+
+Similarly, to iterate over successors use succ_iterator/succ_begin/succ_end.
+
+同样，使用succ_iterator/succ_begin/succ_end可以遍历所有后继。
+
