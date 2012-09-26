@@ -1049,3 +1049,133 @@ Similarly, to iterate over successors use succ_iterator/succ_begin/succ_end.
 
 同样，使用succ_iterator/succ_begin/succ_end可以遍历所有后继。
 
+### Making simple changes 简单的修改
+
+There are some primitive transformation operations present in the LLVM infrastructure that are worth knowing about. When performing transformations, it's fairly common to manipulate the contents of basic blocks. This section describes some of the common methods for doing so and gives example code.
+
+__TBD__
+
+#### Creating and inserting new Instructions 创建并插入新指令
+
+_Instantiating Instructions_
+
+_初始化指令_
+
+Creation of Instructions is straight-forward: simply call the constructor for the kind of instruction to instantiate and provide the necessary parameters. For example, an AllocaInst only requires a (const-ptr-to) Type. Thus:
+
+创建指令的过程是很直接的：只需要调用特定指令类型的构造函数，并提供必要的参数即可。例如可以这样创建AllocaInst：
+
+```
+AllocaInst* ai = new AllocaInst(Type::Int32Ty);
+```
+
+will create an AllocaInst instance that represents the allocation of one integer in the current stack frame, at run time. Each Instruction subclass is likely to have varying default parameters which change the semantics of the instruction, so refer to the doxygen documentation for the subclass of Instruction that you're interested in instantiating.
+
+这样就创建了一个AllocaInst指令，它表示运行时在栈上为一个整数分配空间。由于创建不同的Instruction类所需的参数可能不一样，所以在使用之前需要参考doxygen文档。
+
+_Naming values_
+
+_命名变量_
+
+It is very useful to name the values of instructions when you're able to, as this facilitates the debugging of your transformations. If you end up looking at generated LLVM machine code, you definitely want to have logical names associated with the results of instructions! By supplying a value for the Name (default) parameter of the Instruction constructor, you associate a logical name with the result of the instruction's execution at run time. For example, say that I'm writing a transformation that dynamically allocates space for an integer on the stack, and that integer is going to be used as some kind of index by some other code. To accomplish this, I place an AllocaInst at the first point in the first BasicBlock of some Function, and I'm intending to use it within the same Function. I might do:
+
+如果可以的话，给指令变量命名是非常有用的，因为可以方便调试。在查看已生成好的LLVM机器码时，你一定会希望每个指令的结果都有对应的名称！只要在调用Instruction的构造函数时提供了Name参数，这条指令执行的结果就会与此名称关联起来。例如，当我需要在栈上为一个整数动态分配空间，且该整数将会被其它代码作为某种索引使用，那么，我需要在函数的第一个BasicBlock的开始位置放置一条AllocaInst指令，这样可以在该函数的其它地方使用它了。具体代码：
+
+```
+AllocaInst* pa = new AllocaInst(Type::Int32Ty, 0, "indexLoc");
+```
+
+where indexLoc is now the logical name of the instruction's execution value, which is a pointer to an integer on the run time stack.
+
+indexLoc现在就是该条指令结果的名称，即在栈上分配的那个整数。
+
+_Inserting instructions_
+
+_插入指令_
+
+There are essentially two ways to insert an Instruction into an existing sequence of instructions that form a BasicBlock:
+
+往指令序列中插入指令有两种方式：
+
+* Insertion into an explicit instruction list 显式  
+Given a BasicBlock* pb, an Instruction* pi within that BasicBlock, and a newly-created instruction we wish to insert before *pi, we do the following:  
+给定一个BasicBlock \*pb和一个已经在pb中的Instruction \*pi，需要把一个新创建的指令插入到pi前面，我们可以这样做：
+
+		BasicBlock *pb = ...;
+		Instruction *pi = ...;
+		Instruction *newInst = new Instruction(...);
+		pb->getInstList().insert(pi, newInst); // Inserts newInst before pi in pb
+Appending to the end of a BasicBlock is so common that the Instruction class and Instruction-derived classes provide constructors which take a pointer to a BasicBlock to be appended to. For example code that looked like:  
+由于在BasicBlock的尾部添加指令也很普遍，所以Instruction及其子类的构造函数提供了一个参数，以标明该指令将被添加到哪个BasicBlock的尾部。以下代码
+
+		BasicBlock *pb = ...;
+		Instruction *newInst = new Instruction(...);
+
+		pb->getInstList().push_back(newInst); // Appends newInst to pb
+becomes:  
+将变成：
+
+		BasicBlock *pb = ...;
+		Instruction *newInst = new Instruction(..., pb);
+which is much cleaner, especially if you are creating long instruction streams.  
+后者显得更加清楚，特别是在创建一个很长的指令流时。
+
+* Insertion into an implicit instruction list 隐式  
+Instruction instances that are already in BasicBlocks are implicitly associated with an existing instruction list: the instruction list of the enclosing basic block. Thus, we could have accomplished the same thing as the above code without being given a BasicBlock by doing:  
+在BasicBlock中的指令实际上已经隐性地存入了一个已存在的指令序列中，即基本语句块的指令序列。这样，我们以下面的代码来完成与上例中同样的事情：
+
+		Instruction *pi = ...;
+		Instruction *newInst = new Instruction(...);
+
+		pi->getParent()->getInstList().insert(pi, newInst);
+In fact, this sequence of steps occurs so frequently that the Instruction class and Instruction-derived classes provide constructors which take (as a default parameter) a pointer to an Instruction which the newly-created Instruction should precede. That is, Instruction constructors are capable of inserting the newly-created instance into the BasicBlock of a provided instruction, immediately before that instruction. Using an Instruction constructor with a insertBefore (default) parameter, the above code becomes:  
+事实上，插入指令的步骤出现得非常频繁，于是Instruction及其子类还提供了另外一个版本的构造函数，其参数是在这个指令的位置插入新的指令。这意味着，在创建指令时，向其提供一个已在BasicBlock中的指令，即可在此位置插入新创建的指令。采用该方式后代码将变成：
+
+		Instruction* pi = ...;
+		Instruction* newInst = new Instruction(..., pi);
+which is much cleaner, especially if you're creating a lot of instructions and adding them to BasicBlocks.  
+这个版本比上例更加清楚，特别是需要创建一大堆指令并需要将其放入BasicBlock中时。
+
+Deleting Instructions
+
+Deleting an instruction from an existing sequence of instructions that form a BasicBlock is very straight-forward: just call the instruction's eraseFromParent() method. For example:
+
+Instruction *I = .. ;
+I->eraseFromParent();
+This unlinks the instruction from its containing basic block and deletes it. If you'd just like to unlink the instruction from its containing basic block but not delete it, you can use the removeFromParent() method.
+
+Replacing an Instruction with another Value
+
+Replacing individual instructions
+
+Including "llvm/Transforms/Utils/BasicBlockUtils.h" permits use of two very useful replace functions: ReplaceInstWithValue and ReplaceInstWithInst.
+
+Deleting Instructions
+
+ReplaceInstWithValue
+This function replaces all uses of a given instruction with a value, and then removes the original instruction. The following example illustrates the replacement of the result of a particular AllocaInst that allocates memory for a single integer with a null pointer to an integer.
+
+AllocaInst* instToReplace = ...;
+BasicBlock::iterator ii(instToReplace);
+
+ReplaceInstWithValue(instToReplace->getParent()->getInstList(), ii,
+                     Constant::getNullValue(PointerType::getUnqual(Type::Int32Ty)));
+ReplaceInstWithInst
+This function replaces a particular instruction with another instruction, inserting the new instruction into the basic block at the location where the old instruction was, and replacing any uses of the old instruction with the new instruction. The following example illustrates the replacement of one AllocaInst with another.
+
+AllocaInst* instToReplace = ...;
+BasicBlock::iterator ii(instToReplace);
+
+ReplaceInstWithInst(instToReplace->getParent()->getInstList(), ii,
+                    new AllocaInst(Type::Int32Ty, 0, "ptrToReplacedInt"));
+Replacing multiple uses of Users and Values
+
+You can use Value::replaceAllUsesWith and User::replaceUsesOfWith to change more than one use at a time. See the doxygen documentation for the Value Class and User Class, respectively, for more information.
+
+Deleting GlobalVariables
+
+Deleting a global variable from a module is just as easy as deleting an Instruction. First, you must have a pointer to the global variable that you wish to delete. You use this pointer to erase it from its parent, the module. For example:
+
+GlobalVariable *GV = .. ;
+
+GV->eraseFromParent();
