@@ -812,9 +812,11 @@ Because this is a "how-to" section, you should also read about the main classes 
 
 The LLVM compiler infrastructure have many different data structures that may be traversed. Following the example of the C++ standard template library, the techniques used to traverse these various data structures are all basically the same. For a enumerable sequence of values, the XXXbegin() function (or method) returns an iterator to the start of the sequence, the XXXend() function returns an iterator pointing to one past the last valid element of the sequence, and there is some XXXiterator data type that is common between the two operations.
 
-__TBD__
+LLVM提供了许多不同的数据结构，这些数据结构背后的实现技术和C++ STL基本上是一样的。对容器来说，XXXbegin()函数(或方法)返回第一个元素所对应的迭代器，XXXend()返回代表容器结束的迭代器，__TBD__
 
 Because the pattern for iteration is common across many different aspects of the program representation, the standard template library algorithms may be used on them, and it is easier to remember how to iterate. First we show a few common examples of the data structures that need to be traversed. Other data structures are traversed in very similar ways.
+
+由于LLVM中的迭代器模式是独立于不同容器的，所以它们也同样适用于STL算法，而且也易于使用。首先，让我们来看一些关于数据结构的例子，未提到的数据结构也可以采用相似的方式。
 
 #### Iterating over the BasicBlocks in a Function 遍历函数内的所有BasicBlock
 
