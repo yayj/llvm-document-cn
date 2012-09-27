@@ -1136,43 +1136,56 @@ In fact, this sequence of steps occurs so frequently that the Instruction class 
 which is much cleaner, especially if you're creating a lot of instructions and adding them to BasicBlocks.  
 这个版本比上例更加清楚，特别是需要创建一大堆指令并需要将其放入BasicBlock中时。
 
-Deleting Instructions
+#### Deleting Instructions 删除指令
 
 Deleting an instruction from an existing sequence of instructions that form a BasicBlock is very straight-forward: just call the instruction's eraseFromParent() method. For example:
 
+从一个已知的指令序列中删除一条指令也是很直接的：只需要调用指令的eraseFromParent()方法即可。比如：
+
+```
 Instruction *I = .. ;
 I->eraseFromParent();
+```
+
 This unlinks the instruction from its containing basic block and deletes it. If you'd just like to unlink the instruction from its containing basic block but not delete it, you can use the removeFromParent() method.
 
-Replacing an Instruction with another Value
+这段代码解开了指令与它所在的语句块的关联，并将自己删除。若仅仅只是解除两者之间的关联，那么可以使用removeFromParent()方法。
 
-Replacing individual instructions
+#### Replacing an Instruction with another Value 为指令更名
+
+_Replacing individual instructions_
+
+_替换独立的指令_
 
 Including "llvm/Transforms/Utils/BasicBlockUtils.h" permits use of two very useful replace functions: ReplaceInstWithValue and ReplaceInstWithInst.
 
-Deleting Instructions
+"llvm/transforms/Utils/BasicBlockUtils.h"提供了两个非常有用的替换函数：ReplaceInstWithValue和ReplaceInstWithInst。
 
-ReplaceInstWithValue
-This function replaces all uses of a given instruction with a value, and then removes the original instruction. The following example illustrates the replacement of the result of a particular AllocaInst that allocates memory for a single integer with a null pointer to an integer.
+* ReplaceInstWithValue  
+This function replaces all uses of a given instruction with a value, and then removes the original instruction. The following example illustrates the replacement of the result of a particular AllocaInst that allocates memory for a single integer with a null pointer to an integer.  
+该函数__TBD__
 
-AllocaInst* instToReplace = ...;
-BasicBlock::iterator ii(instToReplace);
+		AllocaInst* instToReplace = ...;
+		BasicBlock::iterator ii(instToReplace);
 
-ReplaceInstWithValue(instToReplace->getParent()->getInstList(), ii,
+		ReplaceInstWithValue(instToReplace->getParent()->getInstList(), ii,
                      Constant::getNullValue(PointerType::getUnqual(Type::Int32Ty)));
-ReplaceInstWithInst
-This function replaces a particular instruction with another instruction, inserting the new instruction into the basic block at the location where the old instruction was, and replacing any uses of the old instruction with the new instruction. The following example illustrates the replacement of one AllocaInst with another.
 
-AllocaInst* instToReplace = ...;
-BasicBlock::iterator ii(instToReplace);
+* ReplaceInstWithInst  
+This function replaces a particular instruction with another instruction, inserting the new instruction into the basic block at the location where the old instruction was, and replacing any uses of the old instruction with the new instruction. The following example illustrates the replacement of one AllocaInst with another.  
+该函数实现指令之间的替换，它将新指令放到旧指令的位置，并__TBD__
 
-ReplaceInstWithInst(instToReplace->getParent()->getInstList(), ii,
-                    new AllocaInst(Type::Int32Ty, 0, "ptrToReplacedInt"));
-Replacing multiple uses of Users and Values
+		AllocaInst* instToReplace = ...;
+		BasicBlock::iterator ii(instToReplace);
+
+		ReplaceInstWithInst(instToReplace->getParent()->getInstList(), ii,
+		                    new AllocaInst(Type::Int32Ty, 0, "ptrToReplacedInt"));
+		                    
+_Replacing multiple uses of Users and Values_
 
 You can use Value::replaceAllUsesWith and User::replaceUsesOfWith to change more than one use at a time. See the doxygen documentation for the Value Class and User Class, respectively, for more information.
 
-Deleting GlobalVariables
+#### Deleting GlobalVariables
 
 Deleting a global variable from a module is just as easy as deleting an Instruction. First, you must have a pointer to the global variable that you wish to delete. You use this pointer to erase it from its parent, the module. For example:
 
