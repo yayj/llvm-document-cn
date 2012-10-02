@@ -1151,11 +1151,11 @@ This unlinks the instruction from its containing basic block and deletes it. If 
 
 这段代码解开了指令与它所在的语句块的关联，并将自己删除。若仅仅只是解除两者之间的关联，那么可以使用removeFromParent()方法。
 
-#### Replacing an Instruction with another Value 为指令更名
+#### Replacing an Instruction with another Value 为指令的替换
 
 _Replacing individual instructions_
 
-_替换独立的指令_
+_替换单独的指令_
 
 Including "llvm/Transforms/Utils/BasicBlockUtils.h" permits use of two very useful replace functions: ReplaceInstWithValue and ReplaceInstWithInst.
 
@@ -1163,7 +1163,7 @@ Including "llvm/Transforms/Utils/BasicBlockUtils.h" permits use of two very usef
 
 * ReplaceInstWithValue  
 This function replaces all uses of a given instruction with a value, and then removes the original instruction. The following example illustrates the replacement of the result of a particular AllocaInst that allocates memory for a single integer with a null pointer to an integer.  
-该函数__TBD__
+该函数的作用是在指令序列中，用一个值去替换一条指令。下面的例子展示了如何用一个空指针去替换一条申请一个整数大小的AllocaInstr指令：
 
 		AllocaInst* instToReplace = ...;
 		BasicBlock::iterator ii(instToReplace);
@@ -1173,7 +1173,7 @@ This function replaces all uses of a given instruction with a value, and then re
 
 * ReplaceInstWithInst  
 This function replaces a particular instruction with another instruction, inserting the new instruction into the basic block at the location where the old instruction was, and replacing any uses of the old instruction with the new instruction. The following example illustrates the replacement of one AllocaInst with another.  
-该函数实现指令之间的替换，它将新指令放到旧指令的位置，并__TBD__
+该函数实现指令之间的替换，下例展示了如何用一条AllocaInst指令去替换另一条指令：
 
 		AllocaInst* instToReplace = ...;
 		BasicBlock::iterator ii(instToReplace);
@@ -1185,10 +1185,28 @@ _Replacing multiple uses of Users and Values_
 
 You can use Value::replaceAllUsesWith and User::replaceUsesOfWith to change more than one use at a time. See the doxygen documentation for the Value Class and User Class, respectively, for more information.
 
-#### Deleting GlobalVariables
+__TBD__
+
+#### Deleting GlobalVariables 删除全局变量
 
 Deleting a global variable from a module is just as easy as deleting an Instruction. First, you must have a pointer to the global variable that you wish to delete. You use this pointer to erase it from its parent, the module. For example:
 
+从模块中删除一个全局变量就跟删除一条指令一样容易。首先，要获得待删除的全局变量的指针，然后从它的父结点，即模块中删除即可。例如：
+
+```
 GlobalVariable *GV = .. ;
 
 GV->eraseFromParent();
+```
+
+### How to Create Types 如何创建类型
+
+In generating IR, you may need some complex types. If you know these types statically, you can use TypeBuilder<...>::get(), defined in llvm/Support/TypeBuilder.h, to retrieve them. TypeBuilder has two forms depending on whether you're building types for cross-compilation or native library use. TypeBuilder<T, true> requires that T be independent of the host environment, meaning that it's built out of types from the llvm::types namespace and pointers, functions, arrays, etc. built of those. TypeBuilder<T, false> additionally allows native C types whose size may depend on the host compiler. For example,
+
+FunctionType *ft = TypeBuilder<types::i<8>(types::i<32>*), true>::get();
+is easier to read and write than the equivalent
+
+std::vector<const Type*> params;
+params.push_back(PointerType::getUnqual(Type::Int32Ty));
+FunctionType *ft = FunctionType::get(Type::Int8Ty, params, false);
+See the class comment for more details.
